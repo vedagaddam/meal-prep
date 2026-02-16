@@ -1,42 +1,61 @@
-
 import React from 'react';
-import { Home, Compass, Settings } from 'lucide-react';
+import { Home, UtensilsCrossed, Calendar, Settings } from 'lucide-react';
 
 interface NavigationProps {
-  activeTab: 'home' | 'discover' | 'settings';
-  setActiveTab: (tab: 'home' | 'discover' | 'settings') => void;
+  activeTab: 'home' | 'recipes' | 'mealplan' | 'settings';
+  setActiveTab: (tab: 'home' | 'recipes' | 'mealplan' | 'settings') => void;
 }
 
 const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab }) => {
   return (
-    <nav className="ios-safe-bottom fixed bottom-0 left-0 right-0 bg-white/70 backdrop-blur-xl border-t border-green-100/50 max-w-md mx-auto z-20">
-      <div className="flex justify-around items-center h-16 px-4">
-        <button 
+    <nav className="ios-safe-bottom fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 max-w-2xl mx-auto z-40 px-6">
+      <div className="flex justify-around items-center h-20">
+        <NavButton 
+          active={activeTab === 'home'} 
           onClick={() => setActiveTab('home')}
-          className={`flex flex-col items-center gap-1 transition-all duration-300 ${activeTab === 'home' ? 'text-green-700 scale-110' : 'text-green-300'}`}
-        >
-          <Home className={`w-6 h-6 ${activeTab === 'home' ? 'fill-green-700' : ''}`} />
-          <span className="text-[10px] font-bold">HOME</span>
-        </button>
-
-        <button 
-          onClick={() => setActiveTab('discover')}
-          className={`flex flex-col items-center gap-1 transition-all duration-300 ${activeTab === 'discover' ? 'text-green-700 scale-110' : 'text-green-300'}`}
-        >
-          <Compass className={`w-6 h-6 ${activeTab === 'discover' ? 'fill-green-700' : ''}`} />
-          <span className="text-[10px] font-bold">DISCOVER</span>
-        </button>
-
-        <button 
+          icon={<Home className="w-6 h-6" />}
+          label="Home"
+        />
+        <NavButton 
+          active={activeTab === 'recipes'} 
+          onClick={() => setActiveTab('recipes')}
+          icon={<UtensilsCrossed className="w-6 h-6" />}
+          label="Recipes"
+        />
+        <NavButton 
+          active={activeTab === 'mealplan'} 
+          onClick={() => setActiveTab('mealplan')}
+          icon={<Calendar className="w-6 h-6" />}
+          label="Plan"
+        />
+        <NavButton 
+          active={activeTab === 'settings'} 
           onClick={() => setActiveTab('settings')}
-          className={`flex flex-col items-center gap-1 transition-all duration-300 ${activeTab === 'settings' ? 'text-green-700 scale-110' : 'text-green-300'}`}
-        >
-          <Settings className={`w-6 h-6 ${activeTab === 'settings' ? 'fill-green-700' : ''}`} />
-          <span className="text-[10px] font-bold">SETTINGS</span>
-        </button>
+          icon={<Settings className="w-6 h-6" />}
+          label="Setup"
+        />
       </div>
     </nav>
   );
 };
+
+const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
+  <button 
+    onClick={onClick}
+    className={`flex flex-col items-center gap-1.5 transition-all duration-300 relative group ${active ? 'text-green-700' : 'text-gray-300'}`}
+  >
+    <div className={`p-2 rounded-2xl transition-all ${active ? 'bg-green-50 scale-110' : 'group-hover:bg-gray-50'}`}>
+      {React.cloneElement(icon as React.ReactElement, { 
+        className: `transition-all ${active ? 'stroke-[2.5px]' : 'stroke-2'}` 
+      })}
+    </div>
+    <span className={`text-[10px] font-bold uppercase tracking-widest transition-opacity ${active ? 'opacity-100' : 'opacity-40'}`}>
+      {label}
+    </span>
+    {active && (
+      <div className="absolute -top-1 w-1 h-1 bg-green-600 rounded-full" />
+    )}
+  </button>
+);
 
 export default Navigation;

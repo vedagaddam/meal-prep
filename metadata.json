@@ -1,7 +1,5 @@
 {
-  "name": "Nature Haven PWA",
-  "description": "A serene, nature-themed Progressive Web App designed for relaxation and simple welcoming vibes.",
-  "requestFramePermissions": [
-    "camera"
-  ]
+  "name": "Meal Prep-VM",
+  "description": "Clean and simple meal prep tracking for recipes and nutrition.",
+  "requestFramePermissions": []
 }

@@ -3,25 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Nature Haven</title>
+    <title>Meal Prep-VM</title>
     
     <!-- PWA Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Nature Haven" />
-    <link rel="apple-touch-icon" href="https://picsum.photos/180/180?random=nature_icon" />
+    <meta name="apple-mobile-web-app-title" content="MealPrepVM" />
+    <link rel="apple-touch-icon" href="https://images.unsplash.com/photo-1547592166-23ac45744acd?q=80&w=180&h=180&auto=format&fit=crop" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#15803d" />
+    <meta name="theme-color" content="#166534" />
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(reg => {
-            console.log('Service Worker registered');
-          }).catch(err => {
-            console.log('Service Worker registration failed: ', err);
-          });
+          navigator.serviceWorker.register('/sw.js').catch(err => console.log(err));
         });
       }
     </script>
@@ -31,14 +27,25 @@
         font-family: 'Quicksand', sans-serif;
         -webkit-tap-highlight-color: transparent;
       }
-      .nature-gradient {
-        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+      .meal-prep-bg {
+        background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
       }
       .ios-safe-bottom {
         padding-bottom: env(safe-area-inset-bottom);
       }
       .ios-safe-top {
         padding-top: env(safe-area-inset-top);
+      }
+      /* Custom scrollbar */
+      ::-webkit-scrollbar {
+        width: 4px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #dcfce7;
+        border-radius: 10px;
       }
     </style>
   <script type="importmap">
@@ -54,9 +61,8 @@
 }
 </script>
 </head>
-  <body class="nature-gradient min-h-screen">
+  <body class="meal-prep-bg min-h-screen">
     <div id="root"></div>
-    <!-- Vite entry point -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
