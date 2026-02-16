@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChefHat, ArrowRight, Plus, Database, ShieldCheck, RefreshCw, Cloud, CloudOff, User as UserIcon, Lock, AlertTriangle, UploadCloud } from 'lucide-react';
+import { ChefHat, ArrowRight, Plus, Database, ShieldCheck, RefreshCw, Cloud, CloudOff, User as UserIcon, Lock, AlertTriangle, UploadCloud, Zap, Carrot } from 'lucide-react';
 import { createClient, User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import RecipesTab from './components/RecipesTab';
 import Navigation from './components/Navigation';
@@ -116,6 +116,26 @@ const App: React.FC = () => {
       return null;
     }
   }, [sbConfig]);
+
+  // Macro Totals for the Home screen (today)
+  const homeTotals = useMemo(() => {
+    const todayKey = new Date().toISOString().split('T')[0];
+    const v = { protein: 0, fiber: 0 };
+    const m = { protein: 0, fiber: 0 };
+    
+    const dayPlan = mealPlan[todayKey] || {};
+    Object.values(dayPlan).forEach(meals => {
+      meals.forEach(meal => {
+        const recipe = recipes.find(r => r.id === meal.recipeId);
+        if (recipe) {
+          const target = meal.profile === 'V' ? v : m;
+          target.protein += recipe.macros.protein || 0;
+          target.fiber += recipe.macros.fiber || 0;
+        }
+      });
+    });
+    return { V: v, M: m };
+  }, [mealPlan, recipes]);
 
   const fetchAndMergeCloudData = useCallback(async () => {
     if (!supabase) return;
@@ -358,13 +378,34 @@ const App: React.FC = () => {
       <main className="flex-1 overflow-y-auto scroll-momentum pb-32">
         <div className="p-6 page-transition">
           {activeTab === 'home' && (
-            <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-700 min-h-[70vh]">
+            <div className="flex-1 flex flex-col items-center justify-center space-y-10 animate-in fade-in duration-700 min-h-[85vh] py-10">
               <div className="bg-green-600 p-6 rounded-[2.5rem] shadow-2xl"><ChefHat className="w-16 h-16 text-white" /></div>
               <div className="text-center">
                 <h1 className="text-4xl font-black text-green-900 tracking-tight">Meal Prep-VM</h1>
-                <p className="text-green-700 font-bold tracking-widest uppercase text-xs mt-2 flex items-center justify-center gap-2"><Database className="w-3 h-3" /> Cloud Linked</p>
+                <p className="text-green-700 font-bold tracking-widest uppercase text-[10px] mt-2 flex items-center justify-center gap-2 tracking-[0.3em] opacity-60"><Database className="w-3 h-3" /> Cloud Linked</p>
               </div>
-              <button onClick={() => setActiveTab('recipes')} className="group flex items-center justify-center gap-3 bg-green-900 text-white px-8 py-5 rounded-[2rem] font-bold shadow-xl active:scale-95 transition-all">Go to Recipes <ArrowRight className="w-5 h-5" /></button>
+
+              {/* Dominant Macros Summary for Home */}
+              <div className="w-full max-w-sm grid grid-cols-2 gap-4">
+                <HomeMacroCard 
+                  profile="V" 
+                  protein={homeTotals.V.protein} 
+                  fiber={homeTotals.V.fiber} 
+                  targets={{ protein: 75, fiber: 25 }}
+                  color="indigo"
+                />
+                <HomeMacroCard 
+                  profile="M" 
+                  protein={homeTotals.M.protein} 
+                  fiber={homeTotals.M.fiber} 
+                  targets={{ protein: 100, fiber: 34 }}
+                  color="emerald"
+                />
+              </div>
+
+              <button onClick={() => setActiveTab('recipes')} className="group flex items-center justify-center gap-3 bg-green-900 text-white px-10 py-5 rounded-[2rem] font-bold shadow-xl active:scale-95 transition-all text-sm uppercase tracking-widest">
+                Go to Recipes <ArrowRight className="w-5 h-5" />
+              </button>
             </div>
           )}
 
@@ -395,6 +436,54 @@ const App: React.FC = () => {
           initialData={editingRecipe} 
         />
       )}
+    </div>
+  );
+};
+
+const HomeMacroCard: React.FC<{ 
+  profile: UserProfile; 
+  protein: number; 
+  fiber: number; 
+  targets: { protein: number; fiber: number };
+  color: 'indigo' | 'emerald'
+}> = ({ profile, protein, fiber, targets, color }) => {
+  const isV = profile === 'V';
+  const bgColor = isV ? 'bg-indigo-50 border-indigo-100' : 'bg-emerald-50 border-emerald-100';
+  const accentColor = isV ? 'bg-indigo-600' : 'bg-emerald-600';
+  const textColor = isV ? 'text-indigo-900' : 'text-emerald-900';
+
+  return (
+    <div className={`p-5 rounded-[2.5rem] border ${bgColor} shadow-sm space-y-4`}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black text-white ${accentColor}`}>
+          {profile}
+        </div>
+        <span className={`text-[10px] font-black uppercase tracking-widest opacity-40 ${textColor}`}>Today</span>
+      </div>
+      
+      <div className="space-y-3">
+        <div className="flex justify-between items-end">
+          <div className="flex items-center gap-1.5">
+            <Zap className={`w-3 h-3 ${isV ? 'text-indigo-400' : 'text-emerald-400'}`} />
+            <span className={`text-[9px] font-black uppercase tracking-tighter opacity-60 ${textColor}`}>Pro</span>
+          </div>
+          <span className={`text-sm font-black ${textColor}`}>{protein}<span className="text-[10px] opacity-40 ml-0.5">g</span></span>
+        </div>
+        <div className="flex justify-between items-end">
+          <div className="flex items-center gap-1.5">
+            <Carrot className={`w-3 h-3 ${isV ? 'text-indigo-400' : 'text-emerald-400'}`} />
+            <span className={`text-[9px] font-black uppercase tracking-tighter opacity-60 ${textColor}`}>Fib</span>
+          </div>
+          <span className={`text-sm font-black ${textColor}`}>{fiber}<span className="text-[10px] opacity-40 ml-0.5">g</span></span>
+        </div>
+      </div>
+
+      <div className="h-1 bg-white/50 rounded-full overflow-hidden">
+        <div 
+          className={`h-full ${accentColor} transition-all duration-1000`} 
+          style={{ width: `${Math.min(100, (protein / targets.protein) * 100)}%` }} 
+        />
+      </div>
     </div>
   );
 };
