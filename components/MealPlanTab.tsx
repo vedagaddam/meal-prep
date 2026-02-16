@@ -1,17 +1,19 @@
 
 import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X, User, Zap, Droplets, Flame, Pizza, Carrot, BarChart3, Calendar as CalendarIcon, Utensils, Clock } from 'lucide-react';
-import { Recipe, TimeSlot, MealPlan, UserProfile, PlannedMeal, PrepTask } from '../App';
+import { ChevronLeft, ChevronRight, Plus, X, User, Zap, Droplets, Flame, Pizza, Carrot, BarChart3, Calendar as CalendarIcon, Utensils, Clock, Minus } from 'lucide-react';
+import { Recipe, TimeSlot, MealPlan, UserProfile, PlannedMeal, PrepTask, WaterIntake } from '../App';
 
 interface MealPlanTabProps {
   recipes: Recipe[];
   mealPlan: MealPlan;
   onUpdatePlan: (date: string, slot: string, meals: PlannedMeal[]) => void;
+  waterIntake: WaterIntake;
+  onUpdateWater: (date: string, profile: UserProfile, delta: number) => void;
 }
 
 const SLOTS: TimeSlot[] = ['Pre-Breakfast', 'Breakfast', 'Lunch', 'Snacks', 'Dinner', 'Post-Dinner'];
 
-const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePlan }) => {
+const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePlan, waterIntake, onUpdateWater }) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectingSlot, setSelectingSlot] = useState<TimeSlot | null>(null);
   const [activeProfile, setActiveProfile] = useState<UserProfile>('V');
@@ -38,7 +40,6 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
   const weekStrip = useMemo(() => {
     const strip = [];
     const base = new Date(selectedDate);
-    // Get start of week (Sunday)
     const day = base.getDay();
     const diff = base.getDate() - day;
     const startOfWeek = new Date(base.setDate(diff));
@@ -54,9 +55,7 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
   const addRecipeToSlot = (recipeId: string) => {
     if (!selectingSlot) return;
     const currentMeals = mealPlan[activeDateKey]?.[selectingSlot] || [];
-    
     const alreadyAdded = currentMeals.some(m => m.recipeId === recipeId && m.profile === activeProfile);
-    
     if (!alreadyAdded) {
       onUpdatePlan(activeDateKey, selectingSlot, [...currentMeals, { recipeId, profile: activeProfile }]);
     }
@@ -90,13 +89,11 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
     return { V: v, M: m };
   }, [activeDateKey, mealPlan, recipes]);
 
-  // Next Day Prep Tasks Extraction
   const nextDayPrepTasks = useMemo(() => {
     const tomorrow = new Date(selectedDate);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowKey = formatDateKey(tomorrow);
     const tomorrowPlan = mealPlan[tomorrowKey];
-    
     if (!tomorrowPlan) return [];
 
     const tasks: { recipeName: string; task: string; duration: string }[] = [];
@@ -119,11 +116,11 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
   }, [selectedDate, mealPlan, recipes]);
 
   return (
-    <div className="animate-in slide-in-from-right duration-500 flex flex-col h-full space-y-6 pb-20">
+    <div className="animate-in slide-in-from-right duration-500 flex flex-col space-y-6 pb-20">
       <header className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Meal Plan</h2>
-          <p className="text-xs text-gray-400 font-bold tracking-widest uppercase mt-1">Calendar History</p>
+          <p className="text-xs text-gray-400 font-bold tracking-widest uppercase mt-1">Calendar & Logs</p>
         </div>
         
         <div className="flex bg-gray-100 p-1 rounded-2xl border border-gray-200">
@@ -183,13 +180,6 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
             );
           })}
         </div>
-        
-        <button 
-          onClick={jumpToToday}
-          className="w-full py-2 bg-gray-50 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2"
-        >
-          <CalendarIcon className="w-3 h-3" /> Jump to Today
-        </button>
       </div>
 
       {/* Daily Nutrition Summary */}
@@ -202,7 +192,6 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
       <div className="space-y-4">
         {SLOTS.map(slot => {
           const plannedMeals = mealPlan[activeDateKey]?.[slot] || [];
-
           return (
             <div key={slot} className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex justify-between items-center mb-3">
@@ -227,14 +216,11 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
                     if (!recipe) return null;
                     const isV = meal.profile === 'V';
                     const isEatOut = recipe.type === 'EatOut';
-                    
                     return (
                       <div 
                         key={`${meal.recipeId}-${meal.profile}-${idx}`} 
                         className={`group relative flex items-center gap-2 pr-8 pl-2 py-1.5 rounded-full border transition-all ${
-                          isV 
-                            ? 'bg-indigo-50 border-indigo-100' 
-                            : 'bg-emerald-50 border-emerald-100'
+                          isV ? 'bg-indigo-50 border-indigo-100' : 'bg-emerald-50 border-emerald-100'
                         } ${isEatOut ? 'text-red-600 ring-1 ring-red-100' : (isV ? 'text-indigo-800' : 'text-emerald-800')}`}
                       >
                         <div className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-black ${
@@ -262,7 +248,6 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
           );
         })}
 
-        {/* Prep for Tomorrow Section */}
         {nextDayPrepTasks.length > 0 && (
           <div className="bg-amber-50/30 border border-amber-100 rounded-[2rem] p-6 shadow-sm animate-in fade-in zoom-in-95 mt-6">
             <div className="flex items-center gap-3 mb-4">
@@ -290,7 +275,21 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
         )}
       </div>
 
-      {/* Recipe Picker Modal */}
+      {/* Water Tracker in Plan Tab - Moved to Bottom */}
+      <div className="bg-blue-50/50 border border-blue-100 rounded-[2.5rem] p-6 space-y-4 shadow-sm mt-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Droplets className="w-5 h-5 text-blue-600" />
+            <h3 className="text-sm font-black text-blue-900 uppercase tracking-widest">Daily Water</h3>
+          </div>
+          <span className="text-[10px] font-bold text-blue-400 uppercase tracking-tighter">Goal: 2500ml</span>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <PlanWaterMini profile="V" amount={waterIntake[activeDateKey]?.V || 0} onUpdate={(d) => onUpdateWater(activeDateKey, 'V', d)} color="indigo" />
+          <PlanWaterMini profile="M" amount={waterIntake[activeDateKey]?.M || 0} onUpdate={(d) => onUpdateWater(activeDateKey, 'M', d)} color="emerald" />
+        </div>
+      </div>
+
       {selectingSlot && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectingSlot(null)} />
@@ -306,7 +305,6 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
-
             <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
               {recipes.length > 0 ? (
                 recipes.map(recipe => (
@@ -342,12 +340,32 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
   );
 };
 
+const PlanWaterMini: React.FC<{ profile: UserProfile; amount: number; onUpdate: (delta: number) => void; color: 'indigo' | 'emerald' }> = ({ profile, amount, onUpdate, color }) => {
+  const isV = profile === 'V';
+  const progress = Math.min(100, (amount / 2500) * 100);
+  const accentColor = isV ? 'bg-indigo-600' : 'bg-emerald-600';
+
+  return (
+    <div className="bg-white/80 p-4 rounded-2xl border border-blue-50/50 space-y-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white ${accentColor}`}>{profile}</div>
+        <span className="text-xs font-black text-blue-900">{amount}ml</span>
+      </div>
+      <div className="flex gap-1">
+        <button onClick={() => onUpdate(-250)} className="flex-1 h-8 flex items-center justify-center bg-gray-50 rounded-lg text-gray-400 active:scale-95 transition-all"><Minus className="w-3 h-3" /></button>
+        <button onClick={() => onUpdate(250)} className="flex-[2] h-8 flex items-center justify-center bg-blue-100 rounded-lg text-blue-700 font-bold text-[10px] active:scale-95 transition-all">+250</button>
+      </div>
+      <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-full ${accentColor} transition-all duration-700`} style={{ width: `${progress}%` }} />
+      </div>
+    </div>
+  );
+};
+
 const ProfileSummary: React.FC<{ profile: string; totals: any; color: 'indigo' | 'emerald' }> = ({ profile, totals, color }) => {
   const isV = profile === 'V';
   const themeClass = isV ? 'bg-indigo-50 border-indigo-100 text-indigo-900' : 'bg-emerald-50 border-emerald-100 text-emerald-900';
   const barClass = isV ? 'bg-indigo-600' : 'bg-emerald-600';
-  
-  // Custom targets per profile
   const targets = profile === 'V' 
     ? { calories: 2200, protein: 75, carbs: 300, fat: 50, fiber: 25 }
     : { calories: 2600, protein: 100, carbs: 300, fat: 60, fiber: 34 };
@@ -365,11 +383,8 @@ const ProfileSummary: React.FC<{ profile: string; totals: any; color: 'indigo' |
       </div>
 
       <div className="space-y-4">
-        {/* Dominant Macros: Protein and Fiber */}
         <MacroProgressBar label="Protein" val={totals.protein} target={targets.protein} barClass={barClass} suffix="g" />
         <MacroProgressBar label="Fiber" val={totals.fiber} target={targets.fiber} barClass={barClass} suffix="g" />
-        
-        {/* Secondary Grid: Calories, Carbs, Fat */}
         <div className="grid grid-cols-3 gap-x-2 gap-y-4 pt-2 border-t border-black/5">
           <MacroProgressBar label="Calories" val={totals.calories} target={targets.calories} barClass={barClass} suffix="" small />
           <MacroProgressBar label="Carbs" val={totals.carbs} target={targets.carbs} barClass={barClass} suffix="g" small />
@@ -390,7 +405,6 @@ const MacroProgressBar: React.FC<{
 }> = ({ label, val, target, barClass, suffix, small }) => {
   const percent = Math.min(100, (val / target) * 100);
   const isOver = val > target;
-
   return (
     <div className="space-y-1.5">
       <div className="flex justify-between items-end">
@@ -403,10 +417,7 @@ const MacroProgressBar: React.FC<{
         </div>
       </div>
       <div className={`${small ? 'h-1' : 'h-1.5'} bg-white/50 rounded-full overflow-hidden relative`}>
-        <div 
-          className={`h-full ${isOver ? 'bg-red-500' : barClass} transition-all duration-700 ease-out rounded-full`} 
-          style={{ width: `${percent}%` }} 
-        />
+        <div className={`h-full ${isOver ? 'bg-red-500' : barClass} transition-all duration-700 ease-out rounded-full`} style={{ width: `${percent}%` }} />
       </div>
     </div>
   );
