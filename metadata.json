@@ -1,0 +1,7 @@
+{
+  "name": "Nature Haven PWA",
+  "description": "A serene, nature-themed Progressive Web App designed for relaxation and simple welcoming vibes.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

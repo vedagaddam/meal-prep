@@ -1,0 +1,23 @@
+
+{
+  "name": "Nature Haven",
+  "short_name": "Haven",
+  "description": "A tranquil nature-themed web application.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f0fdf4",
+  "theme_color": "#15803d",
+  "icons": [
+    {
+      "src": "https://picsum.photos/192/192?random=nature1",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://picsum.photos/512/512?random=nature2",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
