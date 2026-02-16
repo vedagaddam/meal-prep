@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChefHat, ArrowRight, Plus, Database, ShieldCheck, RefreshCw, CheckCircle2, Cloud, CloudOff, LogIn, LogOut, User as UserIcon, Mail, Lock, Key, Link as LinkIcon, Leaf, ShieldAlert, Info, ExternalLink, AlertTriangle, Ghost, RotateCcw, Copy, Check, Search, ShieldQuestion, UploadCloud, DownloadCloud, Unlock } from 'lucide-react';
-import { createClient, User } from '@supabase/supabase-js';
+import { createClient, User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import RecipesTab from './components/RecipesTab';
 import Navigation from './components/Navigation';
 import RecipeForm from './components/RecipeForm';
@@ -32,6 +32,9 @@ const PUBLIC_USER_ID = '00000000-0000-0000-0000-000000000000';
 const SQL_SETUP = `-- FIX: REMOVE AUTH REQUIREMENT (Run this if saves fail)
 ALTER TABLE recipes DROP CONSTRAINT IF EXISTS recipes_user_id_fkey;
 ALTER TABLE meal_plans DROP CONSTRAINT IF EXISTS meal_plans_user_id_fkey;
+
+-- Ensure public UUID is acceptable
+ALTER TABLE recipes ALTER COLUMN user_id SET DEFAULT '00000000-0000-0000-0000-000000000000';
 
 -- INITIAL SETUP (If starting fresh)
 create table if not exists recipes (
@@ -227,7 +230,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!supabase) return;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       setUser(session?.user ?? null);
       fetchAndMergeCloudData();
     });
