@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { Recipe } from '../App';
-import { Edit2, Trash2, Clock } from 'lucide-react';
+import { Edit2, Trash2, Clock, Cloud, CloudOff } from 'lucide-react';
 
 interface RecipesTabProps {
   recipes: Recipe[];
@@ -27,7 +28,17 @@ const RecipesTab: React.FC<RecipesTabProps> = ({ recipes, onEdit, onDelete }) =>
               <tr key={recipe.id} className="hover:bg-green-50/30 transition-colors">
                 <td className="px-6 py-5 whitespace-nowrap">
                   <div className="flex flex-col gap-1">
-                    <div className="text-sm font-bold text-gray-900">{recipe.name}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-bold text-gray-900">{recipe.name}</div>
+                      {recipe.synced ? (
+                        <Cloud className="w-3 h-3 text-green-500" />
+                      ) : (
+                        /* Fixed: Moved 'title' from Lucide icon component to a wrapping span */
+                        <span title="Local only" className="flex items-center">
+                          <CloudOff className="w-3 h-3 text-gray-300" />
+                        </span>
+                      )}
+                    </div>
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider w-fit ${
                       recipe.difficulty === 'Easy' ? 'bg-green-100 text-green-700' :
                       recipe.difficulty === 'Medium' ? 'bg-amber-100 text-amber-700' :

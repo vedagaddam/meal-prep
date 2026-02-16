@@ -1,8 +1,9 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Meal Prep-VM</title>
     
     <!-- PWA Meta Tags -->
@@ -17,7 +18,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(err => console.log(err));
+          navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
         });
       }
     </script>
@@ -26,26 +27,28 @@
       body {
         font-family: 'Quicksand', sans-serif;
         -webkit-tap-highlight-color: transparent;
+        overscroll-behavior-y: none;
       }
       .meal-prep-bg {
         background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
       }
       .ios-safe-bottom {
-        padding-bottom: env(safe-area-inset-bottom);
+        padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
       }
       .ios-safe-top {
         padding-top: env(safe-area-inset-top);
       }
-      /* Custom scrollbar */
-      ::-webkit-scrollbar {
-        width: 4px;
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #dcfce7; border-radius: 10px; }
+      
+      /* Smooth transitions for PWA feel */
+      .page-transition {
+        animation: fadeIn 0.4s ease-out;
       }
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #dcfce7;
-        border-radius: 10px;
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
       }
     </style>
   <script type="importmap">
@@ -56,7 +59,8 @@
     "react/": "https://esm.sh/react@^19.2.4/",
     "lucide-react": "https://esm.sh/lucide-react@^0.564.0",
     "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4"
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.1"
   }
 }
 </script>

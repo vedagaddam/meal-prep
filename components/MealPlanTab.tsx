@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X, Calendar as CalendarIcon, Clock } from 'lucide-react';
-import { Recipe, DayOfWeek, TimeSlot, MealPlan } from '../App';
+import { ChevronLeft, ChevronRight, Plus, X, User } from 'lucide-react';
+import { Recipe, DayOfWeek, TimeSlot, MealPlan, UserProfile, PlannedMeal } from '../App';
 
 interface MealPlanTabProps {
   recipes: Recipe[];
   mealPlan: MealPlan;
-  onUpdatePlan: (day: string, slot: string, recipeIds: string[]) => void;
+  onUpdatePlan: (day: string, slot: string, meals: PlannedMeal[]) => void;
 }
 
 const DAYS: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -14,6 +14,7 @@ const SLOTS: TimeSlot[] = ['Pre-Breakfast', 'Breakfast', 'Lunch', 'Snacks', 'Din
 const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePlan }) => {
   const [activeDayIdx, setActiveDayIdx] = useState(0);
   const [selectingSlot, setSelectingSlot] = useState<TimeSlot | null>(null);
+  const [activeProfile, setActiveProfile] = useState<UserProfile>('V');
 
   const activeDay = DAYS[activeDayIdx];
 
@@ -22,16 +23,20 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
 
   const addRecipeToSlot = (recipeId: string) => {
     if (!selectingSlot) return;
-    const currentRecipes = mealPlan[activeDay]?.[selectingSlot] || [];
-    if (!currentRecipes.includes(recipeId)) {
-      onUpdatePlan(activeDay, selectingSlot, [...currentRecipes, recipeId]);
+    const currentMeals = mealPlan[activeDay]?.[selectingSlot] || [];
+    
+    // Check if this recipe for this profile is already added
+    const alreadyAdded = currentMeals.some(m => m.recipeId === recipeId && m.profile === activeProfile);
+    
+    if (!alreadyAdded) {
+      onUpdatePlan(activeDay, selectingSlot, [...currentMeals, { recipeId, profile: activeProfile }]);
     }
     setSelectingSlot(null);
   };
 
-  const removeRecipeFromSlot = (slot: TimeSlot, recipeId: string) => {
-    const currentRecipes = mealPlan[activeDay]?.[slot] || [];
-    onUpdatePlan(activeDay, slot, currentRecipes.filter(id => id !== recipeId));
+  const removeRecipeFromSlot = (slot: TimeSlot, recipeId: string, profile: UserProfile) => {
+    const currentMeals = mealPlan[activeDay]?.[slot] || [];
+    onUpdatePlan(activeDay, slot, currentMeals.filter(m => !(m.recipeId === recipeId && m.profile === profile)));
   };
 
   return (
@@ -39,19 +44,37 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
       <header className="mb-6 flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Weekly Plan</h2>
-          <p className="text-xs text-gray-400 font-bold tracking-widest uppercase mt-1">Nourishment Schedule</p>
+          <p className="text-xs text-gray-400 font-bold tracking-widest uppercase mt-1">Dual Profile Tracker</p>
+        </div>
+        
+        {/* Profile Selector */}
+        <div className="flex bg-gray-100 p-1 rounded-2xl border border-gray-200">
+          {(['V', 'M'] as UserProfile[]).map(p => (
+            <button
+              key={p}
+              onClick={() => setActiveProfile(p)}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-black transition-all ${
+                activeProfile === p 
+                  ? (p === 'V' ? 'bg-indigo-600 text-white shadow-md' : 'bg-emerald-600 text-white shadow-md')
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <User className="w-3 h-3" />
+              Profile {p}
+            </button>
+          ))}
         </div>
       </header>
 
       {/* Day Selector */}
-      <div className="flex items-center justify-between bg-green-50/50 p-4 rounded-[2rem] mb-6 border border-green-100">
-        <button onClick={handlePrevDay} className="p-2 hover:bg-white rounded-full transition-all text-green-700">
+      <div className="flex items-center justify-between bg-white p-4 rounded-[2rem] mb-6 border border-gray-100 shadow-sm">
+        <button onClick={handlePrevDay} className="p-2 hover:bg-gray-50 rounded-full transition-all text-gray-400">
           <ChevronLeft className="w-6 h-6" />
         </button>
         <div className="text-center">
-          <span className="text-lg font-black text-green-900 tracking-tight">{activeDay}</span>
+          <span className="text-lg font-black text-gray-900 tracking-tight">{activeDay}</span>
         </div>
-        <button onClick={handleNextDay} className="p-2 hover:bg-white rounded-full transition-all text-green-700">
+        <button onClick={handleNextDay} className="p-2 hover:bg-gray-50 rounded-full transition-all text-gray-400">
           <ChevronRight className="w-6 h-6" />
         </button>
       </div>
@@ -59,37 +82,55 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
       {/* Slots List */}
       <div className="space-y-4 flex-1">
         {SLOTS.map(slot => {
-          const selectedRecipeIds = mealPlan[activeDay]?.[slot] || [];
-          const slotRecipes = selectedRecipeIds.map(id => recipes.find(r => r.id === id)).filter(Boolean) as Recipe[];
+          const plannedMeals = mealPlan[activeDay]?.[slot] || [];
 
           return (
             <div key={slot} className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex justify-between items-center mb-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
                   <span className="text-xs font-black text-gray-400 uppercase tracking-widest">{slot}</span>
                 </div>
                 <button 
                   onClick={() => setSelectingSlot(slot)}
-                  className="p-2 text-green-600 hover:bg-green-50 rounded-xl transition-all"
+                  className={`p-2 rounded-xl transition-all ${
+                    activeProfile === 'V' ? 'text-indigo-600 hover:bg-indigo-50' : 'text-emerald-600 hover:bg-emerald-50'
+                  }`}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {slotRecipes.length > 0 ? (
-                  slotRecipes.map(recipe => (
-                    <div key={recipe.id} className="group relative flex items-center gap-2 bg-gray-50 pr-8 pl-3 py-1.5 rounded-full border border-gray-100">
-                      <span className="text-xs font-bold text-gray-700">{recipe.name}</span>
-                      <button 
-                        onClick={() => removeRecipeFromSlot(slot, recipe.id)}
-                        className="absolute right-1 p-1 text-gray-300 hover:text-red-500 transition-colors"
+                {plannedMeals.length > 0 ? (
+                  plannedMeals.map((meal, idx) => {
+                    const recipe = recipes.find(r => r.id === meal.recipeId);
+                    if (!recipe) return null;
+                    const isV = meal.profile === 'V';
+                    return (
+                      <div 
+                        key={`${meal.recipeId}-${meal.profile}-${idx}`} 
+                        className={`group relative flex items-center gap-2 pr-8 pl-2 py-1.5 rounded-full border transition-all ${
+                          isV 
+                            ? 'bg-indigo-50 border-indigo-100 text-indigo-800' 
+                            : 'bg-emerald-50 border-emerald-100 text-emerald-800'
+                        }`}
                       >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))
+                        <div className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-black ${
+                          isV ? 'bg-indigo-200' : 'bg-emerald-200'
+                        }`}>
+                          {meal.profile}
+                        </div>
+                        <span className="text-[11px] font-bold">{recipe.name}</span>
+                        <button 
+                          onClick={() => removeRecipeFromSlot(slot, meal.recipeId, meal.profile)}
+                          className="absolute right-1 p-1 text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })
                 ) : (
                   <span className="text-[10px] text-gray-300 italic font-medium">No meals planned for this slot</span>
                 )}
@@ -107,7 +148,9 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h3 className="text-xl font-bold text-gray-900">Select Recipe</h3>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Adding to {selectingSlot}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                  Adding to {selectingSlot} for <span className={activeProfile === 'V' ? 'text-indigo-600' : 'text-emerald-600'}>Profile {activeProfile}</span>
+                </p>
               </div>
               <button onClick={() => setSelectingSlot(null)} className="p-2 hover:bg-gray-50 rounded-full">
                 <X className="w-5 h-5 text-gray-400" />
@@ -120,13 +163,19 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
                   <button
                     key={recipe.id}
                     onClick={() => addRecipeToSlot(recipe.id)}
-                    className="w-full flex items-center justify-between p-4 rounded-2xl bg-gray-50 hover:bg-green-50 transition-colors group text-left"
+                    className={`w-full flex items-center justify-between p-4 rounded-2xl bg-gray-50 transition-all group text-left ${
+                      activeProfile === 'V' ? 'hover:bg-indigo-50 hover:ring-1 hover:ring-indigo-100' : 'hover:bg-emerald-50 hover:ring-1 hover:ring-emerald-100'
+                    }`}
                   >
                     <div>
-                      <div className="text-sm font-bold text-gray-900 group-hover:text-green-700">{recipe.name}</div>
-                      <div className="text-[10px] text-gray-400 uppercase tracking-tighter">{recipe.macros.calories} kcal • {recipe.difficulty}</div>
+                      <div className={`text-sm font-bold text-gray-900 group-hover:${activeProfile === 'V' ? 'text-indigo-700' : 'text-emerald-700'}`}>
+                        {recipe.name}
+                      </div>
+                      <div className="text-[10px] text-gray-400 uppercase tracking-tighter">
+                        {recipe.macros.calories} kcal • {recipe.difficulty}
+                      </div>
                     </div>
-                    <Plus className="w-4 h-4 text-gray-300 group-hover:text-green-600" />
+                    <Plus className={`w-4 h-4 text-gray-300 group-hover:${activeProfile === 'V' ? 'text-indigo-600' : 'text-emerald-600'}`} />
                   </button>
                 ))
               ) : (
