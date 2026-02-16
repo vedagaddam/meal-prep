@@ -9,6 +9,8 @@ interface RecipeFormProps {
   initialData: Recipe | null;
 }
 
+const STORES = ['Costco', "Trader Joe's", 'Whole Foods', 'Manpasand', 'HEB', 'Meat Market', 'Other'];
+
 const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData }) => {
   const [name, setName] = useState('');
   const [difficulty, setDifficulty] = useState<Recipe['difficulty']>('Easy');
@@ -24,13 +26,13 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
       setPrepTasks([...(initialData.prepTasks || [])]);
       setMacros({ ...initialData.macros });
     } else {
-      setIngredients([{ item: '', quantity: 1, unit: 'item' }]);
+      setIngredients([{ item: '', quantity: 1, unit: 'item', storeName: 'Other' }]);
       setPrepTasks([]);
     }
   }, [initialData]);
 
   const addIngredient = () => {
-    setIngredients([...ingredients, { item: '', quantity: 1, unit: 'item' }]);
+    setIngredients([...ingredients, { item: '', quantity: 1, unit: 'item', storeName: 'Other' }]);
   };
 
   const removeIngredient = (index: number) => {
@@ -185,47 +187,58 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
                 <Plus className="w-3 h-3" /> Add Item
               </button>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {ingredients.map((ing, idx) => (
-                <div key={idx} className="flex gap-2 items-start animate-in fade-in slide-in-from-left-2 duration-300">
-                  <input 
-                    required
-                    className="flex-[2] bg-gray-50 border-0 rounded-xl p-3.5 text-base focus:ring-2 focus:ring-green-500"
-                    placeholder="Item"
-                    value={ing.item}
-                    onChange={e => updateIngredient(idx, 'item', e.target.value)}
-                  />
-                  <input 
-                    required
-                    type="number"
-                    step="any"
-                    className="w-16 bg-gray-50 border-0 rounded-xl p-3.5 text-base focus:ring-2 focus:ring-green-500 text-center"
-                    placeholder="Qty"
-                    value={ing.quantity}
-                    onChange={e => updateIngredient(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                  />
-                  <select 
-                    className="flex-1 bg-gray-50 border-0 rounded-xl p-3.5 text-base focus:ring-2 focus:ring-green-500 appearance-none"
-                    value={ing.unit}
-                    onChange={e => updateIngredient(idx, 'unit', e.target.value)}
-                  >
-                    <option value="item">item</option>
-                    <option value="cup">cup</option>
-                    <option value="cups">cups</option>
-                    <option value="grams">grams</option>
-                    <option value="kg">kg</option>
-                    <option value="tbsp">tbsp</option>
-                    <option value="tsp">tsp</option>
-                    <option value="ml">ml</option>
-                    <option value="liter">liter</option>
-                  </select>
-                  <button 
-                    type="button"
-                    onClick={() => removeIngredient(idx)}
-                    className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all shrink-0"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
+                <div key={idx} className="bg-gray-50/50 p-4 rounded-[1.5rem] border border-gray-100/50 space-y-3 animate-in fade-in slide-in-from-left-2 duration-300">
+                  <div className="flex gap-2">
+                    <input 
+                      required
+                      className="flex-1 bg-white border border-gray-100 rounded-xl p-3 text-base focus:ring-2 focus:ring-green-500"
+                      placeholder="Item name"
+                      value={ing.item}
+                      onChange={e => updateIngredient(idx, 'item', e.target.value)}
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => removeIngredient(idx)}
+                      className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all shrink-0"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <input 
+                      required
+                      type="number"
+                      step="any"
+                      className="w-20 bg-white border border-gray-100 rounded-xl p-3 text-base focus:ring-2 focus:ring-green-500 text-center"
+                      placeholder="Qty"
+                      value={ing.quantity}
+                      onChange={e => updateIngredient(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                    />
+                    <select 
+                      className="w-24 bg-white border border-gray-100 rounded-xl p-3 text-base focus:ring-2 focus:ring-green-500 appearance-none"
+                      value={ing.unit}
+                      onChange={e => updateIngredient(idx, 'unit', e.target.value)}
+                    >
+                      <option value="item">item</option>
+                      <option value="cup">cup</option>
+                      <option value="cups">cups</option>
+                      <option value="grams">grams</option>
+                      <option value="kg">kg</option>
+                      <option value="tbsp">tbsp</option>
+                      <option value="tsp">tsp</option>
+                      <option value="ml">ml</option>
+                      <option value="liter">liter</option>
+                    </select>
+                    <select 
+                      className="flex-1 bg-white border border-gray-100 rounded-xl p-3 text-base focus:ring-2 focus:ring-green-500 appearance-none"
+                      value={ing.storeName || 'Other'}
+                      onChange={e => updateIngredient(idx, 'storeName', e.target.value)}
+                    >
+                      {STORES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
                 </div>
               ))}
             </div>

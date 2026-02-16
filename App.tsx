@@ -1,16 +1,17 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChefHat, ArrowRight, Plus, Database, ShieldCheck, RefreshCw, CheckCircle2, Cloud, CloudOff, LogIn, LogOut, User as UserIcon, Mail, Lock, Key, Link as LinkIcon, Leaf, ShieldAlert, Info, ExternalLink, AlertTriangle, Ghost, RotateCcw, Copy, Check, Search, ShieldQuestion, UploadCloud, DownloadCloud, Unlock } from 'lucide-react';
+import { ChefHat, ArrowRight, Plus, Database, ShieldCheck, RefreshCw, Cloud, CloudOff, User as UserIcon, Lock, AlertTriangle, UploadCloud } from 'lucide-react';
 import { createClient, User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import RecipesTab from './components/RecipesTab';
 import Navigation from './components/Navigation';
 import RecipeForm from './components/RecipeForm';
 import MealPlanTab from './components/MealPlanTab';
+import GroceriesTab from './components/GroceriesTab';
 
 // Types & Interfaces
 export type DayOfWeek = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
 export type TimeSlot = 'Pre-Breakfast' | 'Breakfast' | 'Lunch' | 'Snacks' | 'Dinner' | 'Post-Dinner';
-export interface Ingredient { item: string; quantity: number; unit: string; }
+export interface Ingredient { item: string; quantity: number; unit: string; storeName?: string; }
 export interface PrepTask { task: string; duration: string; }
 export interface Recipe {
   id: string;
@@ -92,7 +93,7 @@ const getDataLocal = async (key: string) => {
 };
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'home' | 'recipes' | 'mealplan' | 'settings'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'recipes' | 'mealplan' | 'groceries'>('home');
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlan>({});
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -100,8 +101,6 @@ const App: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'local-only' | 'locked'>('locked');
   const [isLoading, setIsLoading] = useState(true);
   const [criticalError, setCriticalError] = useState<{title: string, msg: string, showSql?: boolean} | null>(null);
-  const [isPushing, setIsPushing] = useState(false);
-  const [copied, setCopied] = useState(false);
   
   const [sbConfig, setSbConfig] = useState<{ url: string; key: string } | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -171,38 +170,6 @@ const App: React.FC = () => {
       console.error("Sync Error:", err);
     }
   }, [supabase]);
-
-  const pushLocalToCloud = async () => {
-    if (!supabase || recipes.length === 0) return;
-    setIsPushing(true);
-    setSyncStatus('syncing');
-    try {
-      const payload = recipes.map(r => ({
-        id: r.id,
-        user_id: user?.id || PUBLIC_USER_ID,
-        name: r.name,
-        difficulty: r.difficulty,
-        ingredients: r.ingredients,
-        prep_tasks: r.prepTasks,
-        macros: r.macros
-      }));
-
-      const { error } = await supabase.from('recipes').upsert(payload);
-      if (error) throw error;
-
-      setRecipes(current => current.map(r => ({ ...r, synced: true })));
-      setSyncStatus('synced');
-    } catch (err: any) {
-      if (err.code === '23503') {
-        setCriticalError({ title: "Save Blocked", msg: "Database constraint violated. Run the SQL fix.", showSql: true });
-      } else {
-        alert(`Push failed: ${err.message}`);
-      }
-      setSyncStatus('error');
-    } finally {
-      setIsPushing(false);
-    }
-  };
 
   const handleLockVault = useCallback(async () => {
     if (!confirm("Disconnect Cloud?")) return;
@@ -328,8 +295,8 @@ const App: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">SQL FIX (Run in Supabase)</span>
-              <button onClick={() => { navigator.clipboard.writeText(SQL_SETUP); setCopied(true); setTimeout(()=>setCopied(false), 2000); }} className="text-[10px] font-black text-green-600 uppercase flex items-center gap-1">
-                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} {copied ? 'Copied' : 'Copy SQL'}
+              <button onClick={() => { navigator.clipboard.writeText(SQL_SETUP); }} className="text-[10px] font-black text-green-600 uppercase flex items-center gap-1">
+                 Copy SQL
               </button>
             </div>
             <div className="bg-gray-900 rounded-2xl p-5 overflow-x-auto scroll-momentum"><pre className="text-[11px] text-green-400 font-mono leading-relaxed">{SQL_SETUP}</pre></div>
@@ -409,42 +376,8 @@ const App: React.FC = () => {
             <MealPlanTab recipes={recipes} mealPlan={mealPlan} onUpdatePlan={handleUpdatePlan} />
           )}
 
-          {activeTab === 'settings' && (
-            <div className="animate-in fade-in duration-500 space-y-8 pb-10">
-              <header><h2 className="text-2xl font-bold text-gray-900">Setup</h2></header>
-              
-              <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
-                <div className="flex items-center gap-3"><div className="p-2 bg-indigo-50 rounded-xl text-indigo-600"><UserIcon className="w-5 h-5" /></div><h3 className="font-bold text-gray-900">Cloud Sync</h3></div>
-                
-                <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-amber-900">Push Utility</p>
-                    <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest">{recipes.filter(r => !r.synced).length} unsynced items</span>
-                  </div>
-                  <button 
-                    onClick={pushLocalToCloud} 
-                    disabled={isPushing}
-                    className="w-full bg-amber-600 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-amber-700 transition-all disabled:opacity-50"
-                  >
-                    {isPushing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <UploadCloud className="w-3 h-3" />}
-                    Push All to Supabase
-                  </button>
-                </div>
-
-                <div className="p-4 bg-green-50 rounded-2xl border border-green-100">
-                  <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-1">Status</p>
-                  <p className="text-[11px] text-green-600 leading-relaxed">Connected to Supabase. Every change is synced automatically if the cloud is reachable.</p>
-                </div>
-              </section>
-              
-              <section className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100 flex items-center justify-between">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <Cloud className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                  <div className="overflow-hidden"><p className="text-sm font-bold text-gray-900">Project Endpoint</p><p className="text-[10px] text-gray-500 truncate">{sbConfig?.url}</p></div>
-                </div>
-                <button onClick={handleLockVault} className="p-3 bg-white text-gray-400 rounded-xl hover:text-red-500 transition-colors shadow-sm"><Lock className="w-4 h-4" /></button>
-              </section>
-            </div>
+          {activeTab === 'groceries' && (
+            <GroceriesTab recipes={recipes} mealPlan={mealPlan} />
           )}
         </div>
       </main>
