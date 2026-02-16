@@ -36,11 +36,11 @@
         font-family: 'Quicksand', sans-serif;
         -webkit-tap-highlight-color: transparent;
         overscroll-behavior-y: none;
-        background-color: #f0fdf4;
+        background-color: #f8fafc;
       }
 
       .meal-prep-bg {
-        background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+        background: radial-gradient(circle at top left, #f0fdf4 0%, #f8fafc 100%);
       }
 
       .ios-safe-bottom {
@@ -51,19 +51,12 @@
         padding-top: var(--sat);
       }
 
-      /* Fix for horizontal scrolling on mobile */
-      .scroll-momentum {
-        -webkit-overflow-scrolling: touch;
-      }
-
       /* Prevent text size adjustment after orientation change */
       html {
         -webkit-text-size-adjust: 100%;
       }
 
-      ::-webkit-scrollbar { width: 4px; height: 4px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: #dcfce7; border-radius: 10px; }
+      ::-webkit-scrollbar { width: 0px; background: transparent; }
       
       .page-transition {
         animation: fadeIn 0.4s ease-out;
@@ -76,6 +69,12 @@
       /* Ensure inputs don't zoom on iOS */
       input, select, textarea {
         font-size: 16px !important;
+      }
+      
+      /* Smooth scrolling for mobile */
+      .scroll-momentum {
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
       }
     </style>
   <script type="importmap">
