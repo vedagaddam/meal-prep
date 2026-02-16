@@ -116,11 +116,11 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
   }, [selectedDate, mealPlan, recipes]);
 
   return (
-    <div className="animate-in slide-in-from-right duration-500 flex flex-col space-y-6 pb-20">
+    <div className="animate-in slide-in-from-right duration-500 flex flex-col space-y-6 pb-12">
       <header className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Meal Plan</h2>
-          <p className="text-xs text-gray-400 font-bold tracking-widest uppercase mt-1">Calendar & Logs</p>
+          <h2 className="text-2xl font-bold text-gray-900 tracking-tighter">Meal Plan</h2>
+          <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-0.5">Calendar & Logs</p>
         </div>
         
         <div className="flex bg-gray-100 p-1 rounded-2xl border border-gray-200">
@@ -148,7 +148,7 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div className="text-center">
-            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">
+            <h3 className="text-[11px] font-black text-gray-900 uppercase tracking-widest">
               {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
             </h3>
           </div>
@@ -197,7 +197,7 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
               <div className="flex justify-between items-center mb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest">{slot}</span>
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{slot}</span>
                 </div>
                 <button 
                   onClick={() => setSelectingSlot(slot)}
@@ -228,7 +228,7 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
                         } ${isEatOut ? 'bg-red-50 text-red-600' : ''}`}>
                           {isEatOut ? <Utensils className="w-2.5 h-2.5" /> : meal.profile}
                         </div>
-                        <span className={`text-[11px] ${isEatOut ? 'font-black' : 'font-bold'}`}>
+                        <span className={`text-[11px] font-bold ${isEatOut ? 'font-black' : ''}`}>
                           {recipe.name}
                         </span>
                         <button 
@@ -249,7 +249,7 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
         })}
 
         {nextDayPrepTasks.length > 0 && (
-          <div className="bg-amber-50/30 border border-amber-100 rounded-[2rem] p-6 shadow-sm animate-in fade-in zoom-in-95 mt-6">
+          <div className="bg-amber-50/30 border border-amber-100 rounded-[2rem] p-6 shadow-sm animate-in fade-in zoom-in-95 mt-2">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-amber-100 rounded-xl text-amber-600">
                 <Clock className="w-5 h-5" />
@@ -275,8 +275,8 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
         )}
       </div>
 
-      {/* Water Tracker in Plan Tab - Moved to Bottom */}
-      <div className="bg-blue-50/50 border border-blue-100 rounded-[2.5rem] p-6 space-y-4 shadow-sm mt-6">
+      {/* Water Tracker in Plan Tab */}
+      <div className="bg-blue-50/50 border border-blue-100 rounded-[2.5rem] p-6 space-y-4 shadow-sm mt-2 mb-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Droplets className="w-5 h-5 text-blue-600" />
@@ -291,7 +291,7 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
       </div>
 
       {selectingSlot && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectingSlot(null)} />
           <div className="relative w-full max-w-md bg-white rounded-t-[3rem] sm:rounded-[3rem] p-8 shadow-2xl animate-in slide-in-from-bottom-full duration-300">
             <div className="flex justify-between items-center mb-6">
@@ -305,7 +305,7 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
-            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-2 scroll-momentum">
               {recipes.length > 0 ? (
                 recipes.map(recipe => (
                   <button

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChefHat, ArrowRight, Plus, Database, ShieldCheck, RefreshCw, Cloud, CloudOff, User as UserIcon, Lock, AlertTriangle, UploadCloud, Zap, Carrot, Droplets, Minus } from 'lucide-react';
 import { createClient, User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import RecipesTab from './components/RecipesTab';
@@ -77,6 +77,8 @@ const App: React.FC = () => {
   const [sbConfig, setSbConfig] = useState<{ url: string; key: string } | null>(null);
   const [user, setUser] = useState<User | null>(null);
 
+  const scrollContainerRef = useRef<HTMLElement>(null);
+
   const supabase = useMemo(() => {
     if (!sbConfig?.url || !sbConfig?.key) return null;
     try {
@@ -88,6 +90,13 @@ const App: React.FC = () => {
 
   const todayKey = useMemo(() => new Date().toISOString().split('T')[0], []);
   const todayDisplay = useMemo(() => new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }), []);
+
+  // Scroll to top when tab changes
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [activeTab]);
 
   const homeTotals = useMemo(() => {
     const v = { protein: 0, fiber: 0 };
@@ -275,11 +284,11 @@ const App: React.FC = () => {
     }
   };
 
-  if (isLoading) return <div className="flex items-center justify-center min-h-screen bg-green-50"><RefreshCw className="w-8 h-8 text-green-600 animate-spin" /></div>;
+  if (isLoading) return <div className="flex items-center justify-center min-h-[100dvh] bg-green-50"><RefreshCw className="w-8 h-8 text-green-600 animate-spin" /></div>;
 
   if (!sbConfig) {
     return (
-      <div className="min-h-screen bg-green-950 flex flex-col items-center justify-center p-6 ios-safe-top ios-safe-bottom">
+      <div className="min-h-[100dvh] bg-green-950 flex flex-col items-center justify-center p-6 ios-safe-top ios-safe-bottom">
         <form onSubmit={async (e) => {
           e.preventDefault();
           const fd = new FormData(e.currentTarget);
@@ -323,7 +332,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen max-w-2xl mx-auto bg-white shadow-2xl relative overflow-hidden ios-safe-top">
+    <div className="flex flex-col h-[100dvh] max-w-2xl mx-auto bg-white shadow-2xl relative overflow-hidden ios-safe-top">
       {/* Top Floating Status */}
       <div className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-end px-6 pt-4 max-w-2xl mx-auto pointer-events-none">
         <div className="pointer-events-auto bg-white/80 backdrop-blur shadow-sm border border-gray-100 px-3 py-1.5 rounded-full flex items-center gap-2">
@@ -333,7 +342,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <main className="flex-1 overflow-y-auto scroll-momentum pb-32">
+      <main ref={scrollContainerRef} className="flex-1 overflow-y-auto scroll-momentum pb-32">
         <div className="p-6 page-transition">
           {activeTab === 'home' && (
             <div className="flex flex-col space-y-6 animate-in fade-in duration-700">
@@ -378,17 +387,17 @@ const App: React.FC = () => {
           )}
 
           {activeTab === 'recipes' && (
-            <div className="pt-8">
+            <div className="pt-2">
               <header className="mb-6 flex justify-between items-end">
                 <h2 className="text-2xl font-black text-gray-900 tracking-tighter">Catalog</h2>
-                <button onClick={() => { setEditingRecipe(null); setIsFormOpen(true); }} className="p-3 bg-green-600 text-white rounded-2xl shadow-lg"><Plus className="w-6 h-6" /></button>
+                <button onClick={() => { setEditingRecipe(null); setIsFormOpen(true); }} className="p-3 bg-green-600 text-white rounded-2xl shadow-lg active:scale-95 transition-transform"><Plus className="w-6 h-6" /></button>
               </header>
               <RecipesTab recipes={recipes} onEdit={(r) => { setEditingRecipe(r); setIsFormOpen(true); }} onDelete={handleDeleteRecipe} />
             </div>
           )}
 
-          {activeTab === 'mealplan' && <div className="pt-8"><MealPlanTab recipes={recipes} mealPlan={mealPlan} onUpdatePlan={handleUpdatePlan} waterIntake={waterIntake} onUpdateWater={handleUpdateWater} /></div>}
-          {activeTab === 'groceries' && <div className="pt-8"><GroceriesTab recipes={recipes} mealPlan={mealPlan} /></div>}
+          {activeTab === 'mealplan' && <div className="pt-2"><MealPlanTab recipes={recipes} mealPlan={mealPlan} onUpdatePlan={handleUpdatePlan} waterIntake={waterIntake} onUpdateWater={handleUpdateWater} /></div>}
+          {activeTab === 'groceries' && <div className="pt-2"><GroceriesTab recipes={recipes} mealPlan={mealPlan} /></div>}
         </div>
       </main>
 
