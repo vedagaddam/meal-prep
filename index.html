@@ -24,31 +24,58 @@
     </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap');
+      
+      :root {
+        --sat: env(safe-area-inset-top);
+        --sar: env(safe-area-inset-right);
+        --sab: env(safe-area-inset-bottom);
+        --sal: env(safe-area-inset-left);
+      }
+
       body {
         font-family: 'Quicksand', sans-serif;
         -webkit-tap-highlight-color: transparent;
         overscroll-behavior-y: none;
+        background-color: #f0fdf4;
       }
+
       .meal-prep-bg {
         background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
       }
+
       .ios-safe-bottom {
-        padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+        padding-bottom: calc(var(--sab) + 1rem);
       }
+
       .ios-safe-top {
-        padding-top: env(safe-area-inset-top);
+        padding-top: var(--sat);
       }
-      ::-webkit-scrollbar { width: 4px; }
+
+      /* Fix for horizontal scrolling on mobile */
+      .scroll-momentum {
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Prevent text size adjustment after orientation change */
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: #dcfce7; border-radius: 10px; }
       
-      /* Smooth transitions for PWA feel */
       .page-transition {
         animation: fadeIn 0.4s ease-out;
       }
       @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
+      }
+
+      /* Ensure inputs don't zoom on iOS */
+      input, select, textarea {
+        font-size: 16px !important;
       }
     </style>
   <script type="importmap">
@@ -65,7 +92,7 @@
 }
 </script>
 </head>
-  <body class="meal-prep-bg min-h-screen">
+  <body class="meal-prep-bg">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

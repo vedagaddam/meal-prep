@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Save, Plus, Trash2, Clock } from 'lucide-react';
 import { Recipe, Ingredient, PrepTask } from '../App';
@@ -79,26 +80,26 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
       
       <form 
         onSubmit={handleSubmit}
-        className="relative w-full max-w-2xl bg-white rounded-t-[3rem] sm:rounded-[3rem] p-8 shadow-2xl animate-in slide-in-from-bottom-full duration-300 overflow-y-auto max-h-[95vh]"
+        className="relative w-full max-w-2xl bg-white rounded-t-[3rem] sm:rounded-[3rem] p-8 shadow-2xl animate-in slide-in-from-bottom-full duration-300 overflow-y-auto max-h-[95vh] scroll-momentum"
       >
         <div className="flex justify-between items-center mb-8">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">{initialData ? 'Edit Recipe' : 'New Recipe'}</h2>
             <p className="text-xs text-gray-400 font-bold tracking-widest uppercase mt-1">Detail Entry</p>
           </div>
-          <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+          <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors shrink-0">
             <X className="w-6 h-6 text-gray-400" />
           </button>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-8 pb-10">
           {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Recipe Name</label>
               <input 
                 required
-                className="w-full bg-gray-50 border-0 rounded-2xl p-4 focus:ring-2 focus:ring-green-500 transition-all font-medium"
+                className="w-full bg-gray-50 border-0 rounded-2xl p-4 focus:ring-2 focus:ring-green-500 transition-all font-medium text-base"
                 placeholder="e.g. Quinoa Salad"
                 value={name}
                 onChange={e => setName(e.target.value)}
@@ -106,13 +107,13 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Difficulty</label>
-              <div className="flex gap-2 h-full">
+              <div className="flex gap-2 h-14">
                 {(['Easy', 'Medium', 'Hard'] as const).map(d => (
                   <button
                     key={d}
                     type="button"
                     onClick={() => setDifficulty(d)}
-                    className={`flex-1 py-3 rounded-2xl text-xs font-bold transition-all ${
+                    className={`flex-1 rounded-2xl text-xs font-bold transition-all ${
                       difficulty === d 
                       ? 'bg-green-600 text-white shadow-lg shadow-green-100' 
                       : 'bg-gray-50 text-gray-500'
@@ -132,42 +133,42 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
               <button 
                 type="button" 
                 onClick={addPrepTask}
-                className="flex items-center gap-1 text-[10px] font-black text-amber-600 uppercase tracking-wider hover:bg-amber-50 px-3 py-1 rounded-lg transition-all"
+                className="flex items-center gap-1 text-[10px] font-black text-amber-600 uppercase tracking-wider hover:bg-amber-50 px-3 py-2 rounded-lg transition-all"
               >
                 <Plus className="w-3 h-3" /> Add Task
               </button>
             </div>
             <div className="space-y-3">
               {prepTasks.map((prep, idx) => (
-                <div key={idx} className="flex gap-3 items-start animate-in fade-in slide-in-from-left-2 duration-300">
+                <div key={idx} className="flex gap-2 items-start animate-in fade-in slide-in-from-left-2 duration-300">
                   <div className="flex-[2] relative">
-                    <Clock className="absolute left-3 top-3 w-4 h-4 text-amber-300 pointer-events-none" />
+                    <Clock className="absolute left-3 top-3.5 w-4 h-4 text-amber-300 pointer-events-none" />
                     <input 
                       required
-                      className="w-full bg-gray-50 border-0 rounded-xl p-3 pl-10 text-sm focus:ring-2 focus:ring-amber-500"
-                      placeholder="e.g. Soak Dal"
+                      className="w-full bg-gray-50 border-0 rounded-xl p-3.5 pl-10 text-base focus:ring-2 focus:ring-amber-500"
+                      placeholder="Task"
                       value={prep.task}
                       onChange={e => updatePrepTask(idx, 'task', e.target.value)}
                     />
                   </div>
                   <input 
                     required
-                    className="flex-1 bg-gray-50 border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-amber-500 text-center"
-                    placeholder="e.g. 6h"
+                    className="flex-1 bg-gray-50 border-0 rounded-xl p-3.5 text-base focus:ring-2 focus:ring-amber-500 text-center"
+                    placeholder="Time"
                     value={prep.duration}
                     onChange={e => updatePrepTask(idx, 'duration', e.target.value)}
                   />
                   <button 
                     type="button"
                     onClick={() => removePrepTask(idx)}
-                    className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all shrink-0"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
               ))}
               {prepTasks.length === 0 && (
-                <p className="text-[10px] text-gray-400 italic px-2">No advance prep required for this recipe.</p>
+                <p className="text-[10px] text-gray-400 italic px-2">No advance prep required.</p>
               )}
             </div>
           </div>
@@ -179,18 +180,18 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
               <button 
                 type="button" 
                 onClick={addIngredient}
-                className="flex items-center gap-1 text-[10px] font-black text-green-600 uppercase tracking-wider hover:bg-green-50 px-3 py-1 rounded-lg transition-all"
+                className="flex items-center gap-1 text-[10px] font-black text-green-600 uppercase tracking-wider hover:bg-green-50 px-3 py-2 rounded-lg transition-all"
               >
                 <Plus className="w-3 h-3" /> Add Item
               </button>
             </div>
             <div className="space-y-3">
               {ingredients.map((ing, idx) => (
-                <div key={idx} className="flex gap-3 items-start animate-in fade-in slide-in-from-left-2 duration-300">
+                <div key={idx} className="flex gap-2 items-start animate-in fade-in slide-in-from-left-2 duration-300">
                   <input 
                     required
-                    className="flex-[2] bg-gray-50 border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-green-500"
-                    placeholder="Ingredient Name"
+                    className="flex-[2] bg-gray-50 border-0 rounded-xl p-3.5 text-base focus:ring-2 focus:ring-green-500"
+                    placeholder="Item"
                     value={ing.item}
                     onChange={e => updateIngredient(idx, 'item', e.target.value)}
                   />
@@ -198,13 +199,13 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
                     required
                     type="number"
                     step="any"
-                    className="flex-1 bg-gray-50 border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-green-500 text-center"
+                    className="w-16 bg-gray-50 border-0 rounded-xl p-3.5 text-base focus:ring-2 focus:ring-green-500 text-center"
                     placeholder="Qty"
                     value={ing.quantity}
                     onChange={e => updateIngredient(idx, 'quantity', parseFloat(e.target.value) || 0)}
                   />
                   <select 
-                    className="flex-1 bg-gray-50 border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-green-500"
+                    className="flex-1 bg-gray-50 border-0 rounded-xl p-3.5 text-base focus:ring-2 focus:ring-green-500 appearance-none"
                     value={ing.unit}
                     onChange={e => updateIngredient(idx, 'unit', e.target.value)}
                   >
@@ -221,9 +222,9 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
                   <button 
                     type="button"
                     onClick={() => removeIngredient(idx)}
-                    className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all shrink-0"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
               ))}
@@ -266,7 +267,7 @@ const MacroInput: React.FC<{ label: string; val: number; onChange: (v: number) =
       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1">{label}</label>
       <input 
         type="number"
-        className="w-full bg-transparent border-0 p-0 text-lg font-black focus:ring-0 text-gray-900"
+        className="w-full bg-transparent border-0 p-0 text-xl font-black focus:ring-0 text-gray-900"
         value={val}
         onChange={e => onChange(parseFloat(e.target.value) || 0)}
       />

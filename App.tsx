@@ -332,7 +332,7 @@ const App: React.FC = () => {
                 {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} {copied ? 'Copied' : 'Copy SQL'}
               </button>
             </div>
-            <div className="bg-gray-900 rounded-2xl p-5 overflow-x-auto"><pre className="text-[11px] text-green-400 font-mono leading-relaxed">{SQL_SETUP}</pre></div>
+            <div className="bg-gray-900 rounded-2xl p-5 overflow-x-auto scroll-momentum"><pre className="text-[11px] text-green-400 font-mono leading-relaxed">{SQL_SETUP}</pre></div>
           </div>
           <button onClick={() => { setCriticalError(null); fetchAndMergeCloudData(); }} className="w-full bg-green-900 text-white py-5 rounded-[2rem] font-bold">I ran the SQL, Try Again</button>
           <button onClick={handleLockVault} className="w-full text-red-600 font-bold text-xs uppercase tracking-widest">Disconnect</button>
@@ -373,8 +373,8 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen max-w-2xl mx-auto bg-white shadow-2xl relative overflow-hidden pb-24 ios-safe-top">
-      <div className="fixed top-4 right-4 z-[60] flex items-center gap-2">
+    <div className="flex flex-col h-screen max-w-2xl mx-auto bg-white shadow-2xl relative overflow-hidden ios-safe-top">
+      <div className="fixed top-4 right-4 z-[60] flex items-center gap-2 pt-safe">
         <div className={`bg-white/80 backdrop-blur shadow-sm border border-gray-100 px-3 py-1.5 rounded-full flex items-center gap-2`}>
           {syncStatus === 'syncing' ? <RefreshCw className="w-3 h-3 text-amber-500 animate-spin" /> : 
            syncStatus === 'synced' ? <Cloud className="w-3 h-3 text-green-600" /> : <CloudOff className="w-3 h-3 text-gray-400" />}
@@ -382,69 +382,71 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <main className="flex-1 flex flex-col p-6 page-transition">
-        {activeTab === 'home' && (
-          <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-700">
-            <div className="bg-green-600 p-6 rounded-[2.5rem] shadow-2xl"><ChefHat className="w-16 h-16 text-white" /></div>
-            <div className="text-center">
-              <h1 className="text-4xl font-black text-green-900 tracking-tight">Meal Prep-VM</h1>
-              <p className="text-green-700 font-bold tracking-widest uppercase text-xs mt-2 flex items-center justify-center gap-2"><Database className="w-3 h-3" /> Cloud Linked</p>
+      <main className="flex-1 overflow-y-auto scroll-momentum pb-32">
+        <div className="p-6 page-transition">
+          {activeTab === 'home' && (
+            <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-700 min-h-[70vh]">
+              <div className="bg-green-600 p-6 rounded-[2.5rem] shadow-2xl"><ChefHat className="w-16 h-16 text-white" /></div>
+              <div className="text-center">
+                <h1 className="text-4xl font-black text-green-900 tracking-tight">Meal Prep-VM</h1>
+                <p className="text-green-700 font-bold tracking-widest uppercase text-xs mt-2 flex items-center justify-center gap-2"><Database className="w-3 h-3" /> Cloud Linked</p>
+              </div>
+              <button onClick={() => setActiveTab('recipes')} className="group flex items-center justify-center gap-3 bg-green-900 text-white px-8 py-5 rounded-[2rem] font-bold shadow-xl active:scale-95 transition-all">Go to Recipes <ArrowRight className="w-5 h-5" /></button>
             </div>
-            <button onClick={() => setActiveTab('recipes')} className="group flex items-center justify-center gap-3 bg-green-900 text-white px-8 py-5 rounded-[2rem] font-bold shadow-xl active:scale-95 transition-all">Go to Recipes <ArrowRight className="w-5 h-5" /></button>
-          </div>
-        )}
+          )}
 
-        {activeTab === 'recipes' && (
-          <div className="animate-in slide-in-from-right duration-500">
-            <header className="mb-8 flex justify-between items-end">
-              <div><h2 className="text-2xl font-bold text-gray-900">Catalog</h2></div>
-              <button onClick={() => { setEditingRecipe(null); setIsFormOpen(true); }} className="p-3 bg-green-600 text-white rounded-2xl shadow-lg active:scale-95"><Plus className="w-6 h-6" /></button>
-            </header>
-            <RecipesTab recipes={recipes} onEdit={(r) => { setEditingRecipe(r); setIsFormOpen(true); }} onDelete={handleDeleteRecipe} />
-          </div>
-        )}
+          {activeTab === 'recipes' && (
+            <div className="animate-in slide-in-from-right duration-500">
+              <header className="mb-8 flex justify-between items-end">
+                <div><h2 className="text-2xl font-bold text-gray-900">Catalog</h2></div>
+                <button onClick={() => { setEditingRecipe(null); setIsFormOpen(true); }} className="p-3 bg-green-600 text-white rounded-2xl shadow-lg active:scale-95"><Plus className="w-6 h-6" /></button>
+              </header>
+              <RecipesTab recipes={recipes} onEdit={(r) => { setEditingRecipe(r); setIsFormOpen(true); }} onDelete={handleDeleteRecipe} />
+            </div>
+          )}
 
-        {activeTab === 'mealplan' && (
-          <MealPlanTab recipes={recipes} mealPlan={mealPlan} onUpdatePlan={handleUpdatePlan} />
-        )}
+          {activeTab === 'mealplan' && (
+            <MealPlanTab recipes={recipes} mealPlan={mealPlan} onUpdatePlan={handleUpdatePlan} />
+          )}
 
-        {activeTab === 'settings' && (
-          <div className="animate-in fade-in duration-500 space-y-8 pb-10">
-            <header><h2 className="text-2xl font-bold text-gray-900">Setup</h2></header>
-            
-            <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
-              <div className="flex items-center gap-3"><div className="p-2 bg-indigo-50 rounded-xl text-indigo-600"><UserIcon className="w-5 h-5" /></div><h3 className="font-bold text-gray-900">Cloud Sync</h3></div>
+          {activeTab === 'settings' && (
+            <div className="animate-in fade-in duration-500 space-y-8 pb-10">
+              <header><h2 className="text-2xl font-bold text-gray-900">Setup</h2></header>
               
-              <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-amber-900">Push Utility</p>
-                  <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest">{recipes.filter(r => !r.synced).length} unsynced items</span>
+              <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
+                <div className="flex items-center gap-3"><div className="p-2 bg-indigo-50 rounded-xl text-indigo-600"><UserIcon className="w-5 h-5" /></div><h3 className="font-bold text-gray-900">Cloud Sync</h3></div>
+                
+                <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-amber-900">Push Utility</p>
+                    <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest">{recipes.filter(r => !r.synced).length} unsynced items</span>
+                  </div>
+                  <button 
+                    onClick={pushLocalToCloud} 
+                    disabled={isPushing}
+                    className="w-full bg-amber-600 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-amber-700 transition-all disabled:opacity-50"
+                  >
+                    {isPushing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <UploadCloud className="w-3 h-3" />}
+                    Push All to Supabase
+                  </button>
                 </div>
-                <button 
-                  onClick={pushLocalToCloud} 
-                  disabled={isPushing}
-                  className="w-full bg-amber-600 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-amber-700 transition-all disabled:opacity-50"
-                >
-                  {isPushing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <UploadCloud className="w-3 h-3" />}
-                  Push All to Supabase
-                </button>
-              </div>
 
-              <div className="p-4 bg-green-50 rounded-2xl border border-green-100">
-                <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-1">Status</p>
-                <p className="text-[11px] text-green-600 leading-relaxed">Connected to Supabase. Every change is synced automatically if the cloud is reachable.</p>
-              </div>
-            </section>
-            
-            <section className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-3 overflow-hidden">
-                <Cloud className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                <div className="overflow-hidden"><p className="text-sm font-bold text-gray-900">Project Endpoint</p><p className="text-[10px] text-gray-500 truncate">{sbConfig?.url}</p></div>
-              </div>
-              <button onClick={handleLockVault} className="p-3 bg-white text-gray-400 rounded-xl hover:text-red-500 transition-colors shadow-sm"><Lock className="w-4 h-4" /></button>
-            </section>
-          </div>
-        )}
+                <div className="p-4 bg-green-50 rounded-2xl border border-green-100">
+                  <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-1">Status</p>
+                  <p className="text-[11px] text-green-600 leading-relaxed">Connected to Supabase. Every change is synced automatically if the cloud is reachable.</p>
+                </div>
+              </section>
+              
+              <section className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <Cloud className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                  <div className="overflow-hidden"><p className="text-sm font-bold text-gray-900">Project Endpoint</p><p className="text-[10px] text-gray-500 truncate">{sbConfig?.url}</p></div>
+                </div>
+                <button onClick={handleLockVault} className="p-3 bg-white text-gray-400 rounded-xl hover:text-red-500 transition-colors shadow-sm"><Lock className="w-4 h-4" /></button>
+              </section>
+            </div>
+          )}
+        </div>
       </main>
       <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
       {isFormOpen && (
