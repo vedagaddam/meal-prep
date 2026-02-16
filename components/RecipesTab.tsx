@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Recipe } from '../App';
-import { Edit2, Trash2, Clock, Cloud, CloudOff, Zap, Droplets, Flame, Pizza } from 'lucide-react';
+import { Edit2, Trash2, Clock, Cloud, CloudOff, Zap, Droplets, Flame, Pizza, Carrot } from 'lucide-react';
 
 interface RecipesTabProps {
   recipes: Recipe[];
@@ -64,6 +64,7 @@ const RecipesTab: React.FC<RecipesTabProps> = ({ recipes, onEdit, onDelete }) =>
             <MacroIconBadge icon={Zap} label="Pro" val={recipe.macros.protein} suffix="g" color="green" />
             <MacroIconBadge icon={Pizza} label="Car" val={recipe.macros.carbs} suffix="g" color="amber" />
             <MacroIconBadge icon={Droplets} label="Fat" val={recipe.macros.fat} suffix="g" color="rose" />
+            <MacroIconBadge icon={Carrot} label="Fib" val={recipe.macros.fiber || 0} suffix="g" color="orange" />
           </div>
 
           {/* Details Grid */}
@@ -116,12 +117,13 @@ const RecipesTab: React.FC<RecipesTabProps> = ({ recipes, onEdit, onDelete }) =>
   );
 };
 
-const MacroIconBadge: React.FC<{ icon: any; label: string; val: number; suffix?: string; color: 'gray' | 'green' | 'amber' | 'rose' }> = ({ icon: Icon, label, val, suffix = '', color }) => {
+const MacroIconBadge: React.FC<{ icon: any; label: string; val: number; suffix?: string; color: 'gray' | 'green' | 'amber' | 'rose' | 'orange' }> = ({ icon: Icon, label, val, suffix = '', color }) => {
   const colors = {
     gray: 'text-gray-400',
     green: 'text-green-500',
     amber: 'text-amber-500',
-    rose: 'text-rose-500'
+    rose: 'text-rose-500',
+    orange: 'text-orange-500'
   };
   return (
     <div className="flex flex-col items-center">

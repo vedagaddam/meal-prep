@@ -16,7 +16,7 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
   const [difficulty, setDifficulty] = useState<Recipe['difficulty']>('Easy');
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [prepTasks, setPrepTasks] = useState<PrepTask[]>([]);
-  const [macros, setMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const [macros, setMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
 
   useEffect(() => {
     if (initialData) {
@@ -24,7 +24,7 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
       setDifficulty(initialData.difficulty);
       setIngredients([...initialData.ingredients]);
       setPrepTasks([...(initialData.prepTasks || [])]);
-      setMacros({ ...initialData.macros });
+      setMacros({ fiber: 0, ...initialData.macros }); // Default fiber to 0 for legacy data
     } else {
       setIngredients([{ item: '', quantity: 1, unit: 'item', storeName: 'Other' }]);
       setPrepTasks([]);
@@ -247,11 +247,12 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
           {/* Macros */}
           <div>
             <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Nutritional Macros</label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <MacroInput label="Calories" val={macros.calories} onChange={v => setMacros({...macros, calories: v})} color="gray" />
-              <MacroInput label="Protein (g)" val={macros.protein} onChange={v => setMacros({...macros, protein: v})} color="green" />
-              <MacroInput label="Carbs (g)" val={macros.carbs} onChange={v => setMacros({...macros, carbs: v})} color="amber" />
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <MacroInput label="Cal" val={macros.calories} onChange={v => setMacros({...macros, calories: v})} color="gray" />
+              <MacroInput label="Pro (g)" val={macros.protein} onChange={v => setMacros({...macros, protein: v})} color="green" />
+              <MacroInput label="Car (g)" val={macros.carbs} onChange={v => setMacros({...macros, carbs: v})} color="amber" />
               <MacroInput label="Fat (g)" val={macros.fat} onChange={v => setMacros({...macros, fat: v})} color="red" />
+              <MacroInput label="Fiber (g)" val={macros.fiber} onChange={v => setMacros({...macros, fiber: v})} color="orange" />
             </div>
           </div>
 
@@ -268,19 +269,20 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
   );
 };
 
-const MacroInput: React.FC<{ label: string; val: number; onChange: (v: number) => void; color: 'gray' | 'green' | 'amber' | 'red' }> = ({ label, val, onChange, color }) => {
+const MacroInput: React.FC<{ label: string; val: number; onChange: (v: number) => void; color: 'gray' | 'green' | 'amber' | 'red' | 'orange' }> = ({ label, val, onChange, color }) => {
   const bgColors = {
     gray: 'bg-gray-50 focus-within:ring-gray-200',
     green: 'bg-green-50 focus-within:ring-green-200',
     amber: 'bg-amber-50 focus-within:ring-amber-200',
-    red: 'bg-red-50 focus-within:ring-red-200'
+    red: 'bg-red-50 focus-within:ring-red-200',
+    orange: 'bg-orange-50 focus-within:ring-orange-200'
   };
   return (
-    <div className={`${bgColors[color]} p-4 rounded-2xl transition-all ring-inset`}>
-      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-1">{label}</label>
+    <div className={`${bgColors[color]} p-3 rounded-2xl transition-all ring-inset`}>
+      <label className="block text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-1">{label}</label>
       <input 
         type="number"
-        className="w-full bg-transparent border-0 p-0 text-xl font-black focus:ring-0 text-gray-900"
+        className="w-full bg-transparent border-0 p-0 text-base font-black focus:ring-0 text-gray-900"
         value={val}
         onChange={e => onChange(parseFloat(e.target.value) || 0)}
       />

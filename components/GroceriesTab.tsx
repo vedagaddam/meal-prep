@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { ShoppingBag, CheckCircle2, Circle, Leaf, RefreshCw, Store } from 'lucide-react';
+import { ShoppingBag, CheckCircle2, Circle, Leaf, RefreshCw, Store, Calendar } from 'lucide-react';
 import { Recipe, MealPlan, Ingredient } from '../App';
 
 interface GroceriesTabProps {
@@ -15,32 +15,43 @@ interface AggregateIngredient extends Ingredient {
 
 const GroceriesTab: React.FC<GroceriesTabProps> = ({ recipes, mealPlan }) => {
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [daysToLookAhead, setDaysToLookAhead] = useState(7);
 
   const groceryGroups = useMemo(() => {
     const aggregate: Record<string, { item: string; quantity: number; unit: string; storeName: string }> = {};
+    
+    // Calculate dates for the window (Today + X days)
+    const datesToFetch = [];
+    const today = new Date();
+    for (let i = 0; i < daysToLookAhead; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      datesToFetch.push(d.toISOString().split('T')[0]);
+    }
 
-    // Iterate through all days and slots in the meal plan
-    Object.values(mealPlan).forEach((dayPlan) => {
-      Object.values(dayPlan).forEach((meals) => {
-        meals.forEach((meal) => {
-          const recipe = recipes.find((r) => r.id === meal.recipeId);
-          if (recipe) {
-            recipe.ingredients.forEach((ing) => {
-              const store = ing.storeName || 'General';
-              // Create a key based on item name, unit, and store to group properly
-              const key = `${ing.item.toLowerCase()}-${ing.unit.toLowerCase()}-${store.toLowerCase()}`;
-              if (aggregate[key]) {
-                aggregate[key].quantity += ing.quantity;
-              } else {
-                aggregate[key] = { ...ing, storeName: store };
-              }
-            });
-          }
+    // Iterate through specified date range in the meal plan
+    datesToFetch.forEach((dateStr) => {
+      const dayPlan = mealPlan[dateStr];
+      if (dayPlan) {
+        Object.values(dayPlan).forEach((meals) => {
+          meals.forEach((meal) => {
+            const recipe = recipes.find((r) => r.id === meal.recipeId);
+            if (recipe) {
+              recipe.ingredients.forEach((ing) => {
+                const store = ing.storeName || 'General';
+                const key = `${ing.item.toLowerCase()}-${ing.unit.toLowerCase()}-${store.toLowerCase()}`;
+                if (aggregate[key]) {
+                  aggregate[key].quantity += ing.quantity;
+                } else {
+                  aggregate[key] = { ...ing, storeName: store };
+                }
+              });
+            }
+          });
         });
-      });
+      }
     });
 
-    // Group items by store
     const groups: Record<string, AggregateIngredient[]> = {};
     Object.entries(aggregate).forEach(([id, ing]) => {
       const store = ing.storeName || 'General';
@@ -48,13 +59,12 @@ const GroceriesTab: React.FC<GroceriesTabProps> = ({ recipes, mealPlan }) => {
       groups[store].push({ ...ing, id, checked: checkedItems.has(id) });
     });
 
-    // Sort items within each group
     Object.keys(groups).forEach(store => {
       groups[store].sort((a, b) => a.item.localeCompare(b.item));
     });
 
     return groups;
-  }, [mealPlan, recipes, checkedItems]);
+  }, [mealPlan, recipes, checkedItems, daysToLookAhead]);
 
   const toggleItem = (id: string) => {
     const newChecked = new Set(checkedItems);
@@ -66,28 +76,37 @@ const GroceriesTab: React.FC<GroceriesTabProps> = ({ recipes, mealPlan }) => {
     setCheckedItems(newChecked);
   };
 
-  const clearChecked = () => {
-    setCheckedItems(new Set());
-  };
+  const clearChecked = () => setCheckedItems(new Set());
 
   const stores = Object.keys(groceryGroups).sort();
   const totalItems = Object.values(groceryGroups).reduce((acc, curr) => acc + curr.length, 0);
 
   return (
-    <div className="animate-in fade-in duration-500 space-y-6 pb-10">
+    <div className="animate-in fade-in duration-500 space-y-6 pb-20">
       <header className="flex justify-between items-end">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Grocery List</h2>
-          <p className="text-xs text-gray-400 font-bold tracking-widest uppercase mt-1">Grouped by Store</p>
+          <p className="text-xs text-gray-400 font-bold tracking-widest uppercase mt-1">Next {daysToLookAhead} Days</p>
         </div>
-        {checkedItems.size > 0 && (
-          <button 
-            onClick={clearChecked}
-            className="flex items-center gap-1.5 px-4 py-2 bg-gray-50 text-gray-400 hover:text-green-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+        <div className="flex gap-2">
+          {checkedItems.size > 0 && (
+            <button 
+              onClick={clearChecked}
+              className="p-2 bg-gray-50 text-gray-400 hover:text-green-600 rounded-xl transition-all"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          )}
+          <select 
+            value={daysToLookAhead}
+            onChange={(e) => setDaysToLookAhead(parseInt(e.target.value))}
+            className="bg-gray-100 border-none rounded-xl text-[10px] font-black uppercase tracking-widest px-3 py-2 outline-none"
           >
-            <RefreshCw className="w-3 h-3" /> Reset
-          </button>
-        )}
+            <option value={3}>3 Days</option>
+            <option value={7}>7 Days</option>
+            <option value={14}>14 Days</option>
+          </select>
+        </div>
       </header>
 
       {stores.length > 0 ? (
@@ -127,7 +146,6 @@ const GroceriesTab: React.FC<GroceriesTabProps> = ({ recipes, mealPlan }) => {
                           {ing.quantity % 1 === 0 ? ing.quantity : ing.quantity.toFixed(2)} {ing.unit}
                         </p>
                       </div>
-                      {!ing.checked && <Leaf className="w-4 h-4 text-green-100 group-hover:text-green-200 transition-colors" />}
                     </button>
                   ))}
                 </div>
@@ -143,15 +161,6 @@ const GroceriesTab: React.FC<GroceriesTabProps> = ({ recipes, mealPlan }) => {
           <p className="text-gray-400 text-sm font-medium">Your grocery list is empty.</p>
           <p className="text-[10px] text-gray-300 uppercase tracking-widest mt-1 px-8 text-center">
             Plan some meals in the Plan tab to automatically generate your list.
-          </p>
-        </div>
-      )}
-
-      {totalItems > 0 && (
-        <div className="bg-green-900/5 p-6 rounded-[2.5rem] border border-green-900/10 flex items-center gap-4">
-          <Leaf className="w-8 h-8 text-green-700 shrink-0" />
-          <p className="text-[11px] text-green-800 leading-relaxed font-medium">
-            Items are now grouped by store to make your shopping trip more efficient. Total of {totalItems} items to collect.
           </p>
         </div>
       )}
