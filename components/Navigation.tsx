@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, UtensilsCrossed, Calendar, Settings } from 'lucide-react';
+import { Home, UtensilsCrossed, Calendar, Settings, LucideIcon } from 'lucide-react';
 
 interface NavigationProps {
   activeTab: 'home' | 'recipes' | 'mealplan' | 'settings';
@@ -13,25 +13,25 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab }) => {
         <NavButton 
           active={activeTab === 'home'} 
           onClick={() => setActiveTab('home')}
-          icon={<Home className="w-6 h-6" />}
+          icon={Home}
           label="Home"
         />
         <NavButton 
           active={activeTab === 'recipes'} 
           onClick={() => setActiveTab('recipes')}
-          icon={<UtensilsCrossed className="w-6 h-6" />}
+          icon={UtensilsCrossed}
           label="Recipes"
         />
         <NavButton 
           active={activeTab === 'mealplan'} 
           onClick={() => setActiveTab('mealplan')}
-          icon={<Calendar className="w-6 h-6" />}
+          icon={Calendar}
           label="Plan"
         />
         <NavButton 
           active={activeTab === 'settings'} 
           onClick={() => setActiveTab('settings')}
-          icon={<Settings className="w-6 h-6" />}
+          icon={Settings}
           label="Setup"
         />
       </div>
@@ -39,15 +39,22 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab }) => {
   );
 };
 
-const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
+interface NavButtonProps {
+  active: boolean;
+  onClick: () => void;
+  icon: LucideIcon;
+  label: string;
+}
+
+const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, label }) => (
   <button 
     onClick={onClick}
     className={`flex flex-col items-center gap-1.5 transition-all duration-300 relative group ${active ? 'text-green-700' : 'text-gray-300'}`}
   >
     <div className={`p-2 rounded-2xl transition-all ${active ? 'bg-green-50 scale-110' : 'group-hover:bg-gray-50'}`}>
-      {React.cloneElement(icon as React.ReactElement, { 
-        className: `transition-all ${active ? 'stroke-[2.5px]' : 'stroke-2'}` 
-      })}
+      <Icon 
+        className={`w-6 h-6 transition-all ${active ? 'stroke-[2.5px]' : 'stroke-2'}`} 
+      />
     </div>
     <span className={`text-[10px] font-bold uppercase tracking-widest transition-opacity ${active ? 'opacity-100' : 'opacity-40'}`}>
       {label}
