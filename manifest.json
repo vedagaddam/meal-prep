@@ -1,9 +1,9 @@
-
 {
   "name": "Nature Haven",
   "short_name": "Haven",
   "description": "A tranquil nature-themed web application.",
-  "start_url": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f0fdf4",
   "theme_color": "#15803d",
