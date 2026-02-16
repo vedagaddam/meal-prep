@@ -1,7 +1,7 @@
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Recipe } from '../App';
-import { Edit2, Trash2, Clock, Cloud, CloudOff, Zap, Droplets, Flame, Pizza, Carrot } from 'lucide-react';
+import { Edit2, Trash2, Clock, Cloud, CloudOff, Zap, Droplets, Flame, Pizza, Carrot, Utensils, UtensilsCrossed } from 'lucide-react';
 
 interface RecipesTabProps {
   recipes: Recipe[];
@@ -10,9 +10,44 @@ interface RecipesTabProps {
 }
 
 const RecipesTab: React.FC<RecipesTabProps> = ({ recipes, onEdit, onDelete }) => {
+  const [filterType, setFilterType] = useState<'Regular' | 'EatOut'>('Regular');
+
+  const filteredRecipes = useMemo(() => {
+    return recipes.filter(r => {
+      const type = r.type || 'Regular';
+      return type === filterType;
+    });
+  }, [recipes, filterType]);
+
   return (
     <div className="w-full space-y-6">
-      {recipes.map((recipe) => (
+      {/* Sub-Tabs for Filtering */}
+      <div className="flex bg-gray-100 p-1 rounded-2xl border border-gray-200 w-full mb-6">
+        <button
+          onClick={() => setFilterType('Regular')}
+          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black transition-all ${
+            filterType === 'Regular'
+              ? 'bg-green-600 text-white shadow-md'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <UtensilsCrossed className="w-4 h-4" />
+          HOME COOKED
+        </button>
+        <button
+          onClick={() => setFilterType('EatOut')}
+          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black transition-all ${
+            filterType === 'EatOut'
+              ? 'bg-red-600 text-white shadow-md'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <Utensils className="w-4 h-4" />
+          EAT OUT
+        </button>
+      </div>
+
+      {filteredRecipes.map((recipe) => (
         <div 
           key={recipe.id} 
           className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-all animate-in fade-in slide-in-from-bottom-4"
@@ -28,7 +63,7 @@ const RecipesTab: React.FC<RecipesTabProps> = ({ recipes, onEdit, onDelete }) =>
                   <CloudOff className="w-4 h-4 text-gray-300 shrink-0" />
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
                   recipe.difficulty === 'Easy' ? 'bg-green-100 text-green-700' :
                   recipe.difficulty === 'Medium' ? 'bg-amber-100 text-amber-700' :
@@ -36,6 +71,11 @@ const RecipesTab: React.FC<RecipesTabProps> = ({ recipes, onEdit, onDelete }) =>
                 }`}>
                   {recipe.difficulty}
                 </span>
+                {recipe.type === 'EatOut' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-red-100 text-red-700">
+                    <Utensils className="w-3 h-3" /> Dine Out
+                  </span>
+                )}
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                   {recipe.ingredients.length} Ingredients
                 </span>
@@ -107,10 +147,14 @@ const RecipesTab: React.FC<RecipesTabProps> = ({ recipes, onEdit, onDelete }) =>
         </div>
       ))}
 
-      {recipes.length === 0 && (
+      {filteredRecipes.length === 0 && (
         <div className="text-center py-20 bg-white rounded-[3rem] border border-dashed border-gray-200">
-          <p className="text-gray-400 text-sm font-medium">Your catalog is empty.</p>
-          <p className="text-[10px] text-gray-300 uppercase tracking-widest mt-1">Add your first recipe to begin</p>
+          <p className="text-gray-400 text-sm font-medium">
+            {filterType === 'Regular' ? 'No home cooked recipes yet.' : 'No eat out entries yet.'}
+          </p>
+          <p className="text-[10px] text-gray-300 uppercase tracking-widest mt-1">
+            Add a new {filterType === 'Regular' ? 'recipe' : 'eat out entry'} to begin
+          </p>
         </div>
       )}
     </div>

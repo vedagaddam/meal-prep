@@ -36,7 +36,8 @@ const GroceriesTab: React.FC<GroceriesTabProps> = ({ recipes, mealPlan }) => {
         Object.values(dayPlan).forEach((meals) => {
           meals.forEach((meal) => {
             const recipe = recipes.find((r) => r.id === meal.recipeId);
-            if (recipe) {
+            // ONLY add ingredients if it's NOT an EatOut entry
+            if (recipe && recipe.type !== 'EatOut') {
               recipe.ingredients.forEach((ing) => {
                 const store = ing.storeName || 'General';
                 const key = `${ing.item.toLowerCase()}-${ing.unit.toLowerCase()}-${store.toLowerCase()}`;

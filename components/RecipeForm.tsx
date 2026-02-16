@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Plus, Trash2, Clock } from 'lucide-react';
+import { X, Save, Plus, Trash2, Clock, Utensils, UtensilsCrossed } from 'lucide-react';
 import { Recipe, Ingredient, PrepTask } from '../App';
 
 interface RecipeFormProps {
@@ -13,6 +13,7 @@ const STORES = ['Costco', "Trader Joe's", 'Whole Foods', 'Manpasand', 'HEB', 'Me
 
 const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData }) => {
   const [name, setName] = useState('');
+  const [type, setType] = useState<'Regular' | 'EatOut'>('Regular');
   const [difficulty, setDifficulty] = useState<Recipe['difficulty']>('Easy');
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [prepTasks, setPrepTasks] = useState<PrepTask[]>([]);
@@ -21,10 +22,11 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
   useEffect(() => {
     if (initialData) {
       setName(initialData.name);
+      setType(initialData.type || 'Regular');
       setDifficulty(initialData.difficulty);
       setIngredients([...initialData.ingredients]);
       setPrepTasks([...(initialData.prepTasks || [])]);
-      setMacros({ fiber: 0, ...initialData.macros }); // Default fiber to 0 for legacy data
+      setMacros({ ...initialData.macros });
     } else {
       setIngredients([{ item: '', quantity: 1, unit: 'item', storeName: 'Other' }]);
       setPrepTasks([]);
@@ -68,6 +70,7 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
     const newRecipe: Recipe = {
       id: initialData?.id || Date.now().toString(),
       name,
+      type,
       difficulty,
       ingredients,
       prepTasks,
@@ -95,6 +98,33 @@ const RecipeForm: React.FC<RecipeFormProps> = ({ onClose, onSave, initialData })
         </div>
 
         <div className="space-y-8 pb-10">
+          {/* Recipe Type Selection */}
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Recipe Type</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setType('Regular')}
+                className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all ${
+                  type === 'Regular' ? 'bg-green-50 border-green-600 text-green-900' : 'bg-white border-gray-100 text-gray-400'
+                }`}
+              >
+                <UtensilsCrossed className="w-4 h-4" />
+                <span className="text-sm font-bold">Home Cooked</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setType('EatOut')}
+                className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all ${
+                  type === 'EatOut' ? 'bg-red-50 border-red-600 text-red-900' : 'bg-white border-gray-100 text-gray-400'
+                }`}
+              >
+                <Utensils className="w-4 h-4" />
+                <span className="text-sm font-bold">Eat Out</span>
+              </button>
+            </div>
+          </div>
+
           {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>

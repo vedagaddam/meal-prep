@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X, User, Zap, Droplets, Flame, Pizza, Carrot, BarChart3, Calendar as CalendarIcon } from 'lucide-react';
-import { Recipe, TimeSlot, MealPlan, UserProfile, PlannedMeal } from '../App';
+import { ChevronLeft, ChevronRight, Plus, X, User, Zap, Droplets, Flame, Pizza, Carrot, BarChart3, Calendar as CalendarIcon, Utensils, Clock } from 'lucide-react';
+import { Recipe, TimeSlot, MealPlan, UserProfile, PlannedMeal, PrepTask } from '../App';
 
 interface MealPlanTabProps {
   recipes: Recipe[];
@@ -89,6 +89,34 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
     });
     return { V: v, M: m };
   }, [activeDateKey, mealPlan, recipes]);
+
+  // Next Day Prep Tasks Extraction
+  const nextDayPrepTasks = useMemo(() => {
+    const tomorrow = new Date(selectedDate);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowKey = formatDateKey(tomorrow);
+    const tomorrowPlan = mealPlan[tomorrowKey];
+    
+    if (!tomorrowPlan) return [];
+
+    const tasks: { recipeName: string; task: string; duration: string }[] = [];
+    const processedRecipeIds = new Set<string>();
+
+    Object.values(tomorrowPlan).forEach(meals => {
+      meals.forEach(meal => {
+        if (!processedRecipeIds.has(meal.recipeId)) {
+          const recipe = recipes.find(r => r.id === meal.recipeId);
+          if (recipe && recipe.prepTasks && recipe.prepTasks.length > 0) {
+            recipe.prepTasks.forEach(pt => {
+              tasks.push({ recipeName: recipe.name, task: pt.task, duration: pt.duration });
+            });
+          }
+          processedRecipeIds.add(meal.recipeId);
+        }
+      });
+    });
+    return tasks;
+  }, [selectedDate, mealPlan, recipes]);
 
   return (
     <div className="animate-in slide-in-from-right duration-500 flex flex-col h-full space-y-6 pb-20">
@@ -198,21 +226,25 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
                     const recipe = recipes.find(r => r.id === meal.recipeId);
                     if (!recipe) return null;
                     const isV = meal.profile === 'V';
+                    const isEatOut = recipe.type === 'EatOut';
+                    
                     return (
                       <div 
                         key={`${meal.recipeId}-${meal.profile}-${idx}`} 
                         className={`group relative flex items-center gap-2 pr-8 pl-2 py-1.5 rounded-full border transition-all ${
                           isV 
-                            ? 'bg-indigo-50 border-indigo-100 text-indigo-800' 
-                            : 'bg-emerald-50 border-emerald-100 text-emerald-800'
-                        }`}
+                            ? 'bg-indigo-50 border-indigo-100' 
+                            : 'bg-emerald-50 border-emerald-100'
+                        } ${isEatOut ? 'text-red-600 ring-1 ring-red-100' : (isV ? 'text-indigo-800' : 'text-emerald-800')}`}
                       >
                         <div className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-black ${
                           isV ? 'bg-indigo-200' : 'bg-emerald-200'
-                        }`}>
-                          {meal.profile}
+                        } ${isEatOut ? 'bg-red-50 text-red-600' : ''}`}>
+                          {isEatOut ? <Utensils className="w-2.5 h-2.5" /> : meal.profile}
                         </div>
-                        <span className="text-[11px] font-bold">{recipe.name}</span>
+                        <span className={`text-[11px] ${isEatOut ? 'font-black' : 'font-bold'}`}>
+                          {recipe.name}
+                        </span>
                         <button 
                           onClick={() => removeRecipeFromSlot(slot, meal.recipeId, meal.profile)}
                           className="absolute right-1 p-1 text-gray-400 hover:text-red-500 transition-colors"
@@ -229,6 +261,33 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
             </div>
           );
         })}
+
+        {/* Prep for Tomorrow Section */}
+        {nextDayPrepTasks.length > 0 && (
+          <div className="bg-amber-50/30 border border-amber-100 rounded-[2rem] p-6 shadow-sm animate-in fade-in zoom-in-95 mt-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-amber-100 rounded-xl text-amber-600">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-amber-900 uppercase tracking-widest leading-none">Prep for Tomorrow</p>
+                <p className="text-[10px] text-amber-600/70 font-bold uppercase tracking-tighter mt-1">Don't forget to soak or ferment!</p>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              {nextDayPrepTasks.map((pt, idx) => (
+                <div key={idx} className="bg-white/80 p-3 rounded-xl border border-amber-50 flex justify-between items-center shadow-sm">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-black text-amber-600 uppercase tracking-tight mb-0.5">{pt.recipeName}</span>
+                    <span className="text-xs font-bold text-gray-700">{pt.task}</span>
+                  </div>
+                  <span className="text-[9px] font-black text-amber-700 uppercase bg-amber-50 px-2 py-1 rounded-full">{pt.duration}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Recipe Picker Modal */}
@@ -259,8 +318,9 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
                     }`}
                   >
                     <div>
-                      <div className={`text-sm font-bold text-gray-900 group-hover:${activeProfile === 'V' ? 'text-indigo-700' : 'text-emerald-700'}`}>
+                      <div className={`text-sm font-bold flex items-center gap-2 ${activeProfile === 'V' ? 'group-hover:text-indigo-700' : 'group-hover:text-emerald-700'} ${recipe.type === 'EatOut' ? 'text-red-600' : 'text-gray-900'}`}>
                         {recipe.name}
+                        {recipe.type === 'EatOut' && <Utensils className="w-3 h-3" />}
                       </div>
                       <div className="text-[10px] text-gray-400 uppercase tracking-tighter">
                         {recipe.macros.calories} kcal • {recipe.difficulty}
