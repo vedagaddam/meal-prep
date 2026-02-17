@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { ShoppingBag, CheckCircle2, Circle, Leaf, RefreshCw, Store, Calendar } from 'lucide-react';
-import { Recipe, MealPlan, Ingredient } from '../App';
+import { Recipe, MealPlan, Ingredient, PlannedMeal } from '../App';
 
 interface GroceriesTabProps {
   recipes: Recipe[];
@@ -33,7 +33,8 @@ const GroceriesTab: React.FC<GroceriesTabProps> = ({ recipes, mealPlan }) => {
     datesToFetch.forEach((dateStr) => {
       const dayPlan = mealPlan[dateStr];
       if (dayPlan) {
-        Object.values(dayPlan).forEach((meals) => {
+        // Fix: Explicitly cast Object.values results to PlannedMeal[][] to resolve 'unknown' type inference on iteration
+        (Object.values(dayPlan) as PlannedMeal[][]).forEach((meals) => {
           meals.forEach((meal) => {
             const recipe = recipes.find((r) => r.id === meal.recipeId);
             // ONLY add ingredients if it's NOT an EatOut entry
@@ -80,7 +81,8 @@ const GroceriesTab: React.FC<GroceriesTabProps> = ({ recipes, mealPlan }) => {
   const clearChecked = () => setCheckedItems(new Set());
 
   const stores = Object.keys(groceryGroups).sort();
-  const totalItems = Object.values(groceryGroups).reduce((acc, curr) => acc + curr.length, 0);
+  // Fix: Cast curr to any[] or AggregateIngredient[] to resolve 'unknown' length property error during reduction
+  const totalItems = Object.values(groceryGroups).reduce((acc, curr) => acc + (curr as any[]).length, 0);
 
   return (
     <div className="animate-in fade-in duration-500 space-y-6 pb-20">

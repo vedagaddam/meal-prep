@@ -102,7 +102,8 @@ const App: React.FC = () => {
     const v = { protein: 0, fiber: 0 };
     const m = { protein: 0, fiber: 0 };
     const dayPlan = mealPlan[todayKey] || {};
-    Object.values(dayPlan).forEach(meals => {
+    // Fix: Explicitly cast Object.values result for iteration on indexed object to avoid 'unknown' errors
+    (Object.values(dayPlan) as PlannedMeal[][]).forEach(meals => {
       meals.forEach(meal => {
         const recipe = recipes.find(r => r.id === meal.recipeId);
         if (recipe) {
@@ -128,14 +129,15 @@ const App: React.FC = () => {
       setRecipes(prevLocal => {
         const recipeMap = new Map<string, Recipe>();
         prevLocal.forEach(r => recipeMap.set(r.id, { ...r, synced: false }));
-        cloudRecipes?.forEach((r: any) => {
+        // Fix: Cast cloudRecipes to any[] to avoid 'unknown' iteration issues
+        (cloudRecipes as any[])?.forEach((r: any) => {
           recipeMap.set(r.id, {
             id: r.id,
             name: r.name,
             type: r.type || 'Regular',
             difficulty: r.difficulty,
             ingredients: r.ingredients,
-            prepTasks: r.prep_tasks || [],
+            prep_tasks: r.prep_tasks || [],
             macros: r.macros,
             synced: true
           });
@@ -148,7 +150,8 @@ const App: React.FC = () => {
       if (cloudPlans) {
         setMealPlan(prev => {
           const newPlan = { ...prev };
-          cloudPlans.forEach((p: any) => {
+          // Fix: Cast cloudPlans to any[]
+          (cloudPlans as any[]).forEach((p: any) => {
             const dateStr = p.planned_date;
             if (!newPlan[dateStr]) newPlan[dateStr] = {};
             newPlan[dateStr][p.slot] = p.meals;
@@ -161,7 +164,8 @@ const App: React.FC = () => {
       if (cloudWater) {
         setWaterIntake(prev => {
           const newWater = { ...prev };
-          cloudWater.forEach((w: any) => {
+          // Fix: Cast cloudWater to any[]
+          (cloudWater as any[]).forEach((w: any) => {
             const dateStr = w.planned_date;
             if (!newWater[dateStr]) newWater[dateStr] = { V: 0, M: 0 };
             newWater[dateStr][w.profile as UserProfile] = w.amount;
@@ -423,9 +427,14 @@ const HomeWaterItem: React.FC<{ profile: UserProfile; amount: number; onUpdate: 
           </div>
         </div>
         <div className="flex gap-1.5">
-          <button onClick={() => onUpdate(-250)} className="w-8 h-8 flex items-center justify-center bg-white/50 text-blue-400 rounded-lg active:scale-90 transition-transform"><Minus className="w-3 h-3" /></button>
-          <button onClick={() => onUpdate(250)} className="px-3 h-8 bg-blue-500 text-white rounded-lg font-black text-[9px] uppercase active:scale-95 transition-transform">+250</button>
-          <button onClick={() => onUpdate(500)} className="px-3 h-8 bg-blue-900 text-white rounded-lg font-black text-[9px] uppercase active:scale-95 transition-transform">+500</button>
+          <button 
+            onClick={() => onUpdate(-50)} 
+            className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-500 border border-rose-100 rounded-lg active:scale-90 transition-transform shadow-sm"
+          >
+            <Minus className="w-4 h-4 stroke-[3px]" />
+          </button>
+          <button onClick={() => onUpdate(50)} className="px-3 h-8 bg-blue-500 text-white rounded-lg font-black text-[9px] uppercase active:scale-95 transition-transform">+50</button>
+          <button onClick={() => onUpdate(100)} className="px-3 h-8 bg-blue-900 text-white rounded-lg font-black text-[9px] uppercase active:scale-95 transition-transform">+100</button>
         </div>
       </div>
       <div className="h-1.5 w-full bg-blue-100 rounded-full overflow-hidden relative">

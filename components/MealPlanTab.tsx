@@ -73,7 +73,8 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
     const m = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
     
     const dayPlan = mealPlan[activeDateKey] || {};
-    Object.values(dayPlan).forEach(meals => {
+    // Fix: Cast Object.values results to PlannedMeal[][] to resolve 'unknown' inference for inner loops
+    (Object.values(dayPlan) as PlannedMeal[][]).forEach(meals => {
       meals.forEach(meal => {
         const recipe = recipes.find(r => r.id === meal.recipeId);
         if (recipe) {
@@ -99,7 +100,8 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
     const tasks: { recipeName: string; task: string; duration: string }[] = [];
     const processedRecipeIds = new Set<string>();
 
-    Object.values(tomorrowPlan).forEach(meals => {
+    // Fix: Explicitly cast Object.values results to PlannedMeal[][] to resolve 'unknown' type on inner iteration
+    (Object.values(tomorrowPlan) as PlannedMeal[][]).forEach(meals => {
       meals.forEach(meal => {
         if (!processedRecipeIds.has(meal.recipeId)) {
           const recipe = recipes.find(r => r.id === meal.recipeId);
@@ -305,7 +307,8 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
-            <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-2 scroll-momentum">
+            {/* Increased max height and added bottom padding to ensure final items are visible and scrollable */}
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2 pb-16 scroll-momentum">
               {recipes.length > 0 ? (
                 recipes.map(recipe => (
                   <button
@@ -352,8 +355,14 @@ const PlanWaterMini: React.FC<{ profile: UserProfile; amount: number; onUpdate: 
         <span className="text-xs font-black text-blue-900">{amount}ml</span>
       </div>
       <div className="flex gap-1">
-        <button onClick={() => onUpdate(-250)} className="flex-1 h-8 flex items-center justify-center bg-gray-50 rounded-lg text-gray-400 active:scale-95 transition-all"><Minus className="w-3 h-3" /></button>
-        <button onClick={() => onUpdate(250)} className="flex-[2] h-8 flex items-center justify-center bg-blue-100 rounded-lg text-blue-700 font-bold text-[10px] active:scale-95 transition-all">+250</button>
+        <button 
+          onClick={() => onUpdate(-50)} 
+          className="flex-1 h-8 flex items-center justify-center bg-rose-50 text-rose-500 border border-rose-100 rounded-lg active:scale-95 transition-all"
+        >
+          <Minus className="w-3 h-3 stroke-[3px]" />
+        </button>
+        <button onClick={() => onUpdate(50)} className="flex-1 h-8 flex items-center justify-center bg-blue-100 rounded-lg text-blue-700 font-bold text-[10px] active:scale-95 transition-all">+50</button>
+        <button onClick={() => onUpdate(100)} className="flex-1 h-8 flex items-center justify-center bg-blue-900 rounded-lg text-white font-bold text-[10px] active:scale-95 transition-all">+100</button>
       </div>
       <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
         <div className={`h-full ${accentColor} transition-all duration-700`} style={{ width: `${progress}%` }} />
