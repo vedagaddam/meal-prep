@@ -307,8 +307,8 @@ const MealPlanTab: React.FC<MealPlanTabProps> = ({ recipes, mealPlan, onUpdatePl
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
-            {/* Increased max height and added bottom padding to ensure final items are visible and scrollable */}
-            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2 pb-16 scroll-momentum">
+            {/* Further increased padding to pb-32 to ensure floating iOS bars don't cover the last recipe */}
+            <div className="space-y-2 max-h-[65vh] overflow-y-auto pr-2 pb-32 scroll-momentum">
               {recipes.length > 0 ? (
                 recipes.map(recipe => (
                   <button
@@ -357,12 +357,12 @@ const PlanWaterMini: React.FC<{ profile: UserProfile; amount: number; onUpdate: 
       <div className="flex gap-1">
         <button 
           onClick={() => onUpdate(-50)} 
-          className="flex-1 h-8 flex items-center justify-center bg-rose-50 text-rose-500 border border-rose-100 rounded-lg active:scale-95 transition-all"
+          className="flex-1 h-9 flex items-center justify-center bg-rose-50 text-rose-500 border-2 border-rose-100 rounded-xl active:scale-95 transition-all shadow-sm"
         >
-          <Minus className="w-3 h-3 stroke-[3px]" />
+          <Minus className="w-4 h-4 stroke-[4px]" />
         </button>
-        <button onClick={() => onUpdate(50)} className="flex-1 h-8 flex items-center justify-center bg-blue-100 rounded-lg text-blue-700 font-bold text-[10px] active:scale-95 transition-all">+50</button>
-        <button onClick={() => onUpdate(100)} className="flex-1 h-8 flex items-center justify-center bg-blue-900 rounded-lg text-white font-bold text-[10px] active:scale-95 transition-all">+100</button>
+        <button onClick={() => onUpdate(50)} className="flex-1 h-9 flex items-center justify-center bg-blue-100 rounded-xl text-blue-700 font-bold text-[10px] active:scale-95 transition-all shadow-sm">+50</button>
+        <button onClick={() => onUpdate(100)} className="flex-1 h-9 flex items-center justify-center bg-blue-900 rounded-xl text-white font-bold text-[10px] active:scale-95 transition-all shadow-sm">+100</button>
       </div>
       <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
         <div className={`h-full ${accentColor} transition-all duration-700`} style={{ width: `${progress}%` }} />

@@ -81,8 +81,8 @@ const GroceriesTab: React.FC<GroceriesTabProps> = ({ recipes, mealPlan }) => {
   const clearChecked = () => setCheckedItems(new Set());
 
   const stores = Object.keys(groceryGroups).sort();
-  // Fix: Cast curr to any[] or AggregateIngredient[] to resolve 'unknown' length property error during reduction
-  const totalItems = Object.values(groceryGroups).reduce((acc, curr) => acc + (curr as any[]).length, 0);
+  // Fix: Explicitly type accumulator as number to avoid 'unknown' type in arithmetic during reduction
+  const totalItems = Object.values(groceryGroups).reduce((acc: number, curr) => acc + (curr as any[]).length, 0);
 
   return (
     <div className="animate-in fade-in duration-500 space-y-6 pb-20">

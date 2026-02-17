@@ -137,7 +137,7 @@ const App: React.FC = () => {
             type: r.type || 'Regular',
             difficulty: r.difficulty,
             ingredients: r.ingredients,
-            prep_tasks: r.prep_tasks || [],
+            prepTasks: r.prep_tasks || [], // FIXED: renamed from prep_tasks to prepTasks to satisfy TS2561
             macros: r.macros,
             synced: true
           });
@@ -429,12 +429,12 @@ const HomeWaterItem: React.FC<{ profile: UserProfile; amount: number; onUpdate: 
         <div className="flex gap-1.5">
           <button 
             onClick={() => onUpdate(-50)} 
-            className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-500 border border-rose-100 rounded-lg active:scale-90 transition-transform shadow-sm"
+            className="w-10 h-10 flex items-center justify-center bg-rose-50 text-rose-500 border-2 border-rose-100 rounded-xl active:scale-90 transition-transform shadow-sm"
           >
-            <Minus className="w-4 h-4 stroke-[3px]" />
+            <Minus className="w-5 h-5 stroke-[4px]" />
           </button>
-          <button onClick={() => onUpdate(50)} className="px-3 h-8 bg-blue-500 text-white rounded-lg font-black text-[9px] uppercase active:scale-95 transition-transform">+50</button>
-          <button onClick={() => onUpdate(100)} className="px-3 h-8 bg-blue-900 text-white rounded-lg font-black text-[9px] uppercase active:scale-95 transition-transform">+100</button>
+          <button onClick={() => onUpdate(50)} className="px-4 h-10 bg-blue-500 text-white rounded-xl font-black text-[10px] uppercase active:scale-95 transition-transform shadow-sm">+50</button>
+          <button onClick={() => onUpdate(100)} className="px-4 h-10 bg-blue-900 text-white rounded-xl font-black text-[10px] uppercase active:scale-95 transition-transform shadow-sm">+100</button>
         </div>
       </div>
       <div className="h-1.5 w-full bg-blue-100 rounded-full overflow-hidden relative">
