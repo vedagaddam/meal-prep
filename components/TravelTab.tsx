@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plane, CheckCircle2, Circle, Plus, Trash2, User, Filter, Search, ChevronDown, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
+import { Plane, CheckCircle2, Circle, Plus, Trash2, User, Filter, Search, ChevronDown, ChevronRight, Maximize2, Minimize2, Edit2, Check, X } from 'lucide-react';
 import { TravelChecklistItem, UserProfile } from '../App';
 
 interface TravelTabProps {
@@ -16,6 +16,12 @@ const TravelTab: React.FC<TravelTabProps> = ({ items, onUpdateItem, onAddItem, o
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [categoryInputs, setCategoryInputs] = useState<{ [key: string]: string }>({});
+  
+  // Editing states
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editItemValue, setEditItemValue] = useState('');
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editCategoryValue, setEditCategoryValue] = useState('');
 
   const categories = useMemo(() => {
     const cats = Array.from(new Set(items.map(i => i.category)));
@@ -67,6 +73,39 @@ const TravelTab: React.FC<TravelTabProps> = ({ items, onUpdateItem, onAddItem, o
     if (!name) return;
     onAddItem(category, name);
     setCategoryInputs(prev => ({ ...prev, [category]: '' }));
+  };
+
+  const startEditingItem = (item: TravelChecklistItem) => {
+    setEditingItemId(item.id);
+    setEditItemValue(item.item);
+  };
+
+  const saveItemEdit = (id: string) => {
+    if (!editItemValue.trim()) return;
+    onUpdateItem(id, { item: editItemValue.trim() });
+    setEditingItemId(null);
+  };
+
+  const startEditingCategory = (e: React.MouseEvent, category: string) => {
+    e.stopPropagation();
+    setEditingCategory(category);
+    setEditCategoryValue(category);
+  };
+
+  const saveCategoryEdit = (oldCategory: string) => {
+    const newVal = editCategoryValue.trim();
+    if (!newVal || newVal === oldCategory) {
+      setEditingCategory(null);
+      return;
+    }
+    
+    // Update all items in this category
+    const itemsToUpdate = items.filter(i => i.category === oldCategory);
+    itemsToUpdate.forEach(item => {
+      onUpdateItem(item.id, { category: newVal });
+    });
+    
+    setEditingCategory(null);
   };
 
   const getCategoryProgress = (catItems: TravelChecklistItem[]) => {
@@ -136,34 +175,81 @@ const TravelTab: React.FC<TravelTabProps> = ({ items, onUpdateItem, onAddItem, o
         {Object.entries(groupedItems).map(([category, catItems]) => {
           const isExpanded = expandedCategories.has(category) || searchQuery.length > 0;
           const progress = getCategoryProgress(catItems);
+          const isEditingCat = editingCategory === category;
 
           return (
             <div key={category} className="bg-white border border-gray-100 rounded-[2rem] overflow-hidden shadow-sm">
-              <button 
-                onClick={() => toggleCategory(category)}
-                className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                  <div className="text-left">
-                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">{category}</h3>
-                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">{catItems.length} items</p>
+              <div className="flex items-center">
+                <button 
+                  onClick={() => toggleCategory(category)}
+                  className="flex-1 flex items-center justify-between p-5 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                    <div className="text-left">
+                      {isEditingCat ? (
+                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                          <input 
+                            autoFocus
+                            value={editCategoryValue}
+                            onChange={e => setEditCategoryValue(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && saveCategoryEdit(category)}
+                            className="bg-gray-50 border border-gray-200 rounded-lg py-1 px-2 text-sm font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          />
+                          <button onClick={() => saveCategoryEdit(category)} className="text-green-600"><Check className="w-4 h-4" /></button>
+                          <button onClick={() => setEditingCategory(null)} className="text-rose-600"><X className="w-4 h-4" /></button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 group/cat">
+                          <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">{category}</h3>
+                          <button 
+                            onClick={(e) => startEditingCategory(e, category)}
+                            className="opacity-0 group-hover/cat:opacity-100 p-1 text-gray-300 hover:text-indigo-600 transition-all"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">{catItems.length} items</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+                  <div className="flex items-center gap-3">
+                    <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+                    </div>
+                    <span className="text-[10px] font-black text-indigo-600 w-8 text-right">{progress}%</span>
                   </div>
-                  <span className="text-[10px] font-black text-indigo-600 w-8 text-right">{progress}%</span>
-                </div>
-              </button>
+                </button>
+              </div>
 
               {isExpanded && (
                 <div className="px-5 pb-5 space-y-2 border-t border-gray-50 pt-4">
                   {catItems.map(item => (
                     <div key={item.id} className="flex items-center justify-between py-2 group">
-                      <div className="flex-1">
-                        <span className="text-sm font-medium text-gray-700">{item.item}</span>
+                      <div className="flex-1 flex items-center gap-2">
+                        {editingItemId === item.id ? (
+                          <div className="flex items-center gap-2 flex-1">
+                            <input 
+                              autoFocus
+                              value={editItemValue}
+                              onChange={e => setEditItemValue(e.target.value)}
+                              onKeyDown={e => e.key === 'Enter' && saveItemEdit(item.id)}
+                              className="bg-gray-50 border border-gray-200 rounded-lg py-1 px-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 w-full"
+                            />
+                            <button onClick={() => saveItemEdit(item.id)} className="text-green-600"><Check className="w-4 h-4" /></button>
+                            <button onClick={() => setEditingItemId(null)} className="text-rose-600"><X className="w-4 h-4" /></button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 group/item">
+                            <span className="text-sm font-medium text-gray-700">{item.item}</span>
+                            <button 
+                              onClick={() => startEditingItem(item)}
+                              className="opacity-0 group-hover/item:opacity-100 p-1 text-gray-300 hover:text-indigo-600 transition-all"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                       
                       <div className="flex items-center gap-4">
