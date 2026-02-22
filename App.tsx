@@ -101,6 +101,12 @@ const App: React.FC = () => {
   const todayKey = useMemo(() => new Date().toISOString().split('T')[0], []);
   const todayDisplay = useMemo(() => new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }), []);
 
+  // Persistence Effects
+  useEffect(() => { if (!isLoading) saveDataLocal('recipes', recipes); }, [recipes, isLoading]);
+  useEffect(() => { if (!isLoading) saveDataLocal('mealplan', mealPlan); }, [mealPlan, isLoading]);
+  useEffect(() => { if (!isLoading) saveDataLocal('water_intake', waterIntake); }, [waterIntake, isLoading]);
+  useEffect(() => { if (!isLoading) saveDataLocal('travel_checklist', travelChecklist); }, [travelChecklist, isLoading]);
+
   // Scroll to top when tab changes
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -212,24 +218,22 @@ const App: React.FC = () => {
   }, [supabase]);
 
   const handleUpdateWater = async (date: string, profile: UserProfile, delta: number) => {
+    let newAmount = 0;
     setWaterIntake(prev => {
       const dayWater = prev[date] || { V: 0, M: 0 };
-      const newAmount = Math.max(0, dayWater[profile] + delta);
-      const next = { ...prev, [date]: { ...dayWater, [profile]: newAmount } };
-      saveDataLocal('water_intake', next);
-      return next;
+      newAmount = Math.max(0, dayWater[profile] + delta);
+      return { ...prev, [date]: { ...dayWater, [profile]: newAmount } };
     });
 
     if (supabase) {
       try {
-        const dayWater = waterIntake[date] || { V: 0, M: 0 };
-        const amount = Math.max(0, dayWater[profile] + delta);
         await supabase.from('water_intake').upsert({
           user_id: user?.id || PUBLIC_USER_ID,
           planned_date: date,
           profile,
-          amount
+          amount: newAmount
         }, { onConflict: 'user_id,planned_date,profile' });
+        setSyncStatus('synced');
       } catch (err) {
         setSyncStatus('error');
       }
@@ -269,9 +273,7 @@ const App: React.FC = () => {
 
   const handleSaveRecipe = async (recipe: Recipe) => {
     setRecipes(prev => {
-      const next = prev.some(r => r.id === recipe.id) ? prev.map(r => r.id === recipe.id ? recipe : r) : [...prev, recipe];
-      saveDataLocal('recipes', next);
-      return next;
+      return prev.some(r => r.id === recipe.id) ? prev.map(r => r.id === recipe.id ? recipe : r) : [...prev, recipe];
     });
     setIsFormOpen(false);
     if (supabase) {
@@ -295,22 +297,14 @@ const App: React.FC = () => {
 
   const handleDeleteRecipe = async (id: string) => {
     if (!confirm("Delete recipe?")) return;
-    setRecipes(prev => {
-      const next = prev.filter(r => r.id !== id);
-      saveDataLocal('recipes', next);
-      return next;
-    });
+    setRecipes(prev => prev.filter(r => r.id !== id));
     if (supabase) {
       await supabase.from('recipes').delete().eq('id', id);
     }
   };
 
   const handleUpdatePlan = async (date: string, slot: string, meals: PlannedMeal[]) => {
-    setMealPlan(prev => {
-      const next = { ...prev, [date]: { ...(prev[date] || {}), [slot]: meals } };
-      saveDataLocal('mealplan', next);
-      return next;
-    });
+    setMealPlan(prev => ({ ...prev, [date]: { ...(prev[date] || {}), [slot]: meals } }));
     if (supabase) {
       await supabase.from('meal_plans').upsert({
         user_id: user?.id || PUBLIC_USER_ID,
@@ -322,29 +316,18 @@ const App: React.FC = () => {
   };
 
   const handleUpdateTravelItem = async (id: string, updates: Partial<TravelChecklistItem>) => {
-    let updatedItem: TravelChecklistItem | undefined;
-    setTravelChecklist(prev => {
-      const next = prev.map(item => {
-        if (item.id === id) {
-          updatedItem = { ...item, ...updates };
-          return updatedItem;
-        }
-        return item;
-      });
-      saveDataLocal('travel_checklist', next);
-      return next;
-    });
+    setTravelChecklist(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
 
-    if (supabase && updatedItem) {
+    if (supabase) {
       try {
-        await supabase.from('travel_checklist').upsert({
-          id: updatedItem.id,
-          category: updatedItem.category,
-          item: updatedItem.item,
-          checked_v: updatedItem.checkedV,
-          checked_m: updatedItem.checkedM,
-          user_id: user?.id || PUBLIC_USER_ID
-        });
+        const dbUpdates: any = {};
+        if (updates.checkedV !== undefined) dbUpdates.checked_v = updates.checkedV;
+        if (updates.checkedM !== undefined) dbUpdates.checked_m = updates.checkedM;
+        if (updates.item !== undefined) dbUpdates.item = updates.item;
+        if (updates.category !== undefined) dbUpdates.category = updates.category;
+
+        await supabase.from('travel_checklist').update(dbUpdates).eq('id', id);
+        setSyncStatus('synced');
       } catch (e) {
         setSyncStatus('error');
       }
@@ -359,11 +342,7 @@ const App: React.FC = () => {
       checkedV: false,
       checkedM: false
     };
-    setTravelChecklist(prev => {
-      const next = [...prev, newItem];
-      saveDataLocal('travel_checklist', next);
-      return next;
-    });
+    setTravelChecklist(prev => [...prev, newItem]);
     if (supabase) {
       try {
         await supabase.from('travel_checklist').upsert({
@@ -374,6 +353,7 @@ const App: React.FC = () => {
           checked_m: newItem.checkedM,
           user_id: user?.id || PUBLIC_USER_ID
         });
+        setSyncStatus('synced');
       } catch (e) {
         setSyncStatus('error');
       }
@@ -381,14 +361,11 @@ const App: React.FC = () => {
   };
 
   const handleDeleteTravelItem = async (id: string) => {
-    setTravelChecklist(prev => {
-      const next = prev.filter(item => item.id !== id);
-      saveDataLocal('travel_checklist', next);
-      return next;
-    });
+    setTravelChecklist(prev => prev.filter(item => item.id !== id));
     if (supabase) {
       try {
         await supabase.from('travel_checklist').delete().eq('id', id);
+        setSyncStatus('synced');
       } catch (e) {
         setSyncStatus('error');
       }
