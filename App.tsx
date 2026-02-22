@@ -7,6 +7,7 @@ import Navigation from './components/Navigation';
 import RecipeForm from './components/RecipeForm';
 import MealPlanTab from './components/MealPlanTab';
 import GroceriesTab from './components/GroceriesTab';
+import TravelTab from './components/TravelTab';
 
 // Types & Interfaces
 export type TimeSlot = 'Pre-Breakfast' | 'Breakfast' | 'Lunch' | 'Snacks' | 'Dinner' | 'Post-Dinner';
@@ -26,6 +27,14 @@ export type UserProfile = 'V' | 'M';
 export interface PlannedMeal { recipeId: string; profile: UserProfile; }
 export interface MealPlan { [date: string]: { [slot: string]: PlannedMeal[]; }; }
 export interface WaterIntake { [date: string]: { [profile in UserProfile]: number }; }
+export interface TravelChecklistItem {
+  id: string;
+  category: string;
+  item: string;
+  checkedV: boolean;
+  checkedM: boolean;
+  synced?: boolean;
+}
 
 const DB_NAME = 'MealPrepVM_Vault';
 const STORE_NAME = 'AppData';
@@ -65,10 +74,11 @@ const getDataLocal = async (key: string) => {
 };
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'home' | 'recipes' | 'mealplan' | 'groceries'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'recipes' | 'mealplan' | 'groceries' | 'travel'>('home');
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlan>({});
   const [waterIntake, setWaterIntake] = useState<WaterIntake>({});
+  const [travelChecklist, setTravelChecklist] = useState<TravelChecklistItem[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'local-only' | 'locked'>('locked');
@@ -120,10 +130,11 @@ const App: React.FC = () => {
     if (!supabase) return;
     setSyncStatus('syncing');
     try {
-      const [{ data: cloudRecipes }, { data: cloudPlans }, { data: cloudWater }] = await Promise.all([
+      const [{ data: cloudRecipes }, { data: cloudPlans }, { data: cloudWater }, { data: cloudTravel }] = await Promise.all([
         supabase.from('recipes').select('*'),
         supabase.from('meal_plans').select('*'),
-        supabase.from('water_intake').select('*')
+        supabase.from('water_intake').select('*'),
+        supabase.from('travel_checklist').select('*')
       ]);
 
       setRecipes(prevLocal => {
@@ -174,6 +185,26 @@ const App: React.FC = () => {
           return newWater;
         });
       }
+
+      if (cloudTravel) {
+        setTravelChecklist(prevLocal => {
+          const itemMap = new Map<string, TravelChecklistItem>();
+          // Use cloud data as source of truth
+          (cloudTravel as any[]).forEach((i: any) => {
+            itemMap.set(i.id, {
+              id: i.id,
+              category: i.category,
+              item: i.item,
+              checkedV: i.checked_v,
+              checkedM: i.checked_m,
+              synced: true
+            });
+          });
+          const final = Array.from(itemMap.values());
+          saveDataLocal('travel_checklist', final);
+          return final;
+        });
+      }
       setSyncStatus('synced');
     } catch (err) {
       setSyncStatus('error');
@@ -212,14 +243,16 @@ const App: React.FC = () => {
         setSbConfig(savedConfig);
         setSyncStatus('local-only');
       }
-      const [r, p, w] = await Promise.all([
+      const [r, p, w, t] = await Promise.all([
         getDataLocal('recipes'),
         getDataLocal('mealplan'),
-        getDataLocal('water_intake')
+        getDataLocal('water_intake'),
+        getDataLocal('travel_checklist')
       ]);
       if (r) setRecipes(r as any);
       if (p) setMealPlan(p as any);
       if (w) setWaterIntake(w as any);
+      if (t) setTravelChecklist(t as any);
       setIsLoading(false);
     };
     init();
@@ -285,6 +318,80 @@ const App: React.FC = () => {
         slot,
         meals
       }, { onConflict: 'user_id,planned_date,slot' });
+    }
+  };
+
+  const handleUpdateTravelItem = async (id: string, updates: Partial<TravelChecklistItem>) => {
+    let updatedItem: TravelChecklistItem | undefined;
+    setTravelChecklist(prev => {
+      const next = prev.map(item => {
+        if (item.id === id) {
+          updatedItem = { ...item, ...updates };
+          return updatedItem;
+        }
+        return item;
+      });
+      saveDataLocal('travel_checklist', next);
+      return next;
+    });
+
+    if (supabase && updatedItem) {
+      try {
+        await supabase.from('travel_checklist').upsert({
+          id: updatedItem.id,
+          category: updatedItem.category,
+          item: updatedItem.item,
+          checked_v: updatedItem.checkedV,
+          checked_m: updatedItem.checkedM,
+          user_id: user?.id || PUBLIC_USER_ID
+        });
+      } catch (e) {
+        setSyncStatus('error');
+      }
+    }
+  };
+
+  const handleAddTravelItem = async (category: string, item: string) => {
+    const newItem: TravelChecklistItem = {
+      id: crypto.randomUUID(),
+      category,
+      item,
+      checkedV: false,
+      checkedM: false
+    };
+    setTravelChecklist(prev => {
+      const next = [...prev, newItem];
+      saveDataLocal('travel_checklist', next);
+      return next;
+    });
+    if (supabase) {
+      try {
+        await supabase.from('travel_checklist').upsert({
+          id: newItem.id,
+          category: newItem.category,
+          item: newItem.item,
+          checked_v: newItem.checkedV,
+          checked_m: newItem.checkedM,
+          user_id: user?.id || PUBLIC_USER_ID
+        });
+      } catch (e) {
+        setSyncStatus('error');
+      }
+    }
+  };
+
+  const handleDeleteTravelItem = async (id: string) => {
+    setTravelChecklist(prev => {
+      const next = prev.filter(item => item.id !== id);
+      saveDataLocal('travel_checklist', next);
+      return next;
+    });
+    if (supabase) {
+      try {
+        await supabase.from('travel_checklist').delete().eq('id', id);
+      } catch (e) {
+        setSyncStatus('error');
+      }
     }
   };
 
@@ -402,6 +509,16 @@ const App: React.FC = () => {
 
           {activeTab === 'mealplan' && <div className="pt-2"><MealPlanTab recipes={recipes} mealPlan={mealPlan} onUpdatePlan={handleUpdatePlan} waterIntake={waterIntake} onUpdateWater={handleUpdateWater} /></div>}
           {activeTab === 'groceries' && <div className="pt-2"><GroceriesTab recipes={recipes} mealPlan={mealPlan} /></div>}
+          {activeTab === 'travel' && (
+            <div className="pt-2">
+              <TravelTab 
+                items={travelChecklist} 
+                onUpdateItem={handleUpdateTravelItem} 
+                onAddItem={handleAddTravelItem} 
+                onDeleteItem={handleDeleteTravelItem} 
+              />
+            </div>
+          )}
         </div>
       </main>
 

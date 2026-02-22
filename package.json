@@ -1,4 +1,3 @@
-
 {
   "name": "nature-haven-pwa",
   "private": true,
@@ -10,10 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.1",
+    "@types/uuid": "^10.0.0",
+    "lucide-react": "^0.564.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "lucide-react": "^0.564.0",
-    "@supabase/supabase-js": "^2.45.1"
+    "uuid": "^13.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

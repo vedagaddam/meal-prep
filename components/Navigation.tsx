@@ -1,10 +1,10 @@
 
 import React from 'react';
-import { Home, UtensilsCrossed, Calendar, ShoppingCart, LucideIcon } from 'lucide-react';
+import { Home, UtensilsCrossed, Calendar, ShoppingCart, Plane, LucideIcon } from 'lucide-react';
 
 interface NavigationProps {
-  activeTab: 'home' | 'recipes' | 'mealplan' | 'groceries';
-  setActiveTab: (tab: 'home' | 'recipes' | 'mealplan' | 'groceries') => void;
+  activeTab: 'home' | 'recipes' | 'mealplan' | 'groceries' | 'travel';
+  setActiveTab: (tab: 'home' | 'recipes' | 'mealplan' | 'groceries' | 'travel') => void;
 }
 
 const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab }) => {
@@ -34,6 +34,12 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab }) => {
           onClick={() => setActiveTab('groceries')}
           icon={ShoppingCart}
           label="Groceries"
+        />
+        <NavButton 
+          active={activeTab === 'travel'} 
+          onClick={() => setActiveTab('travel')}
+          icon={Plane}
+          label="Travel"
         />
       </div>
     </nav>
