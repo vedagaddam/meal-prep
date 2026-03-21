@@ -393,14 +393,29 @@ const App: React.FC = () => {
   const sendNotification = useCallback((title: string, body: string, broadcast = true) => {
     if (!("Notification" in window)) return;
     
-    // Trigger local notification
-    if (Notification.permission === "granted") {
-      new Notification(title, { body, icon: '/favicon.ico' });
-    } else if (Notification.permission !== "denied") {
-      Notification.requestPermission().then(permission => {
-        if (permission === "granted") {
+    const triggerLocal = () => {
+      if (Notification.permission === "granted") {
+        // Use Service Worker for better background reliability on iOS
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then(registration => {
+            registration.showNotification(title, {
+              body,
+              icon: '/favicon.ico',
+              badge: '/favicon.ico',
+              vibrate: [200, 100, 200]
+            });
+          });
+        } else {
           new Notification(title, { body, icon: '/favicon.ico' });
         }
+      }
+    };
+
+    if (Notification.permission === "granted") {
+      triggerLocal();
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") triggerLocal();
       });
     }
 
@@ -420,7 +435,7 @@ const App: React.FC = () => {
 
     const channel = supabase.channel('notifications', {
       config: {
-        broadcast: { self: true } // Receive our own broadcasts to test/sync
+        broadcast: { self: false } // Don't receive our own broadcasts to avoid duplicates
       }
     });
 
@@ -429,6 +444,10 @@ const App: React.FC = () => {
         const { title, body } = payload.payload;
         // Send local notification (don't broadcast back)
         sendNotification(title, body, false);
+      })
+      .on('broadcast', { event: 'timer_reset' }, (payload) => {
+        const { timestamp } = payload.payload;
+        setLastHydrationUpdate(timestamp);
       })
       .on('broadcast', { event: 'water_updated' }, (payload) => {
         const { timestamp } = payload.payload;
@@ -447,15 +466,27 @@ const App: React.FC = () => {
     const interval = setInterval(() => {
       if (lastHydrationUpdate) {
         const oneHour = 60 * 60 * 1000;
-        if (Date.now() - lastHydrationUpdate > oneHour) {
-          sendNotification("Hydration Reminder", "It's been over an hour since your last water update. Stay hydrated!");
-          // Reset last update to avoid spamming every interval check, 
-          // or we could just let it fire until they update.
-          // Let's set it to now so it waits another hour.
-          setLastHydrationUpdate(Date.now());
+        const now = Date.now();
+        if (now - lastHydrationUpdate > oneHour) {
+          const title = "Hydration Reminder";
+          const body = "It's been over an hour since your last water update. Stay hydrated!";
+          
+          sendNotification(title, body, true);
+          
+          // Reset timer locally
+          setLastHydrationUpdate(now);
+          
+          // Broadcast timer reset to other devices so they don't fire too
+          if (notificationChannelRef.current) {
+            notificationChannelRef.current.send({
+              type: 'broadcast',
+              event: 'timer_reset',
+              payload: { timestamp: now }
+            });
+          }
         }
       }
-    }, 60000); // Check every minute
+    }, 30000); // Check every 30 seconds for better accuracy
     return () => clearInterval(interval);
   }, [lastHydrationUpdate, sendNotification]);
 
