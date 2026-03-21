@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChefHat, ArrowRight, Plus, Database, ShieldCheck, RefreshCw, Cloud, CloudOff, User as UserIcon, Lock, AlertTriangle, UploadCloud, Zap, Carrot, Droplets, Minus } from 'lucide-react';
+import { ChefHat, ArrowRight, Plus, Database, ShieldCheck, RefreshCw, Cloud, CloudOff, User as UserIcon, Lock, AlertTriangle, UploadCloud, Zap, Carrot, Droplets, Minus, Bell } from 'lucide-react';
 import { createClient, User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import RecipesTab from './components/RecipesTab';
 import Navigation from './components/Navigation';
@@ -78,6 +78,7 @@ const App: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlan>({});
   const [waterIntake, setWaterIntake] = useState<WaterIntake>({});
+  const [lastHydrationUpdate, setLastHydrationUpdate] = useState<number | null>(null);
   const [travelChecklist, setTravelChecklist] = useState<TravelChecklistItem[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
@@ -105,6 +106,7 @@ const App: React.FC = () => {
   useEffect(() => { if (!isLoading) saveDataLocal('recipes', recipes); }, [recipes, isLoading]);
   useEffect(() => { if (!isLoading) saveDataLocal('mealplan', mealPlan); }, [mealPlan, isLoading]);
   useEffect(() => { if (!isLoading) saveDataLocal('water_intake', waterIntake); }, [waterIntake, isLoading]);
+  useEffect(() => { if (!isLoading && lastHydrationUpdate) saveDataLocal('last_hydration_update', lastHydrationUpdate); }, [lastHydrationUpdate, isLoading]);
   useEffect(() => { if (!isLoading) saveDataLocal('travel_checklist', travelChecklist); }, [travelChecklist, isLoading]);
 
   // Scroll to top when tab changes
@@ -219,6 +221,8 @@ const App: React.FC = () => {
 
   const handleUpdateWater = async (date: string, profile: UserProfile, delta: number) => {
     let newAmount = 0;
+    const now = Date.now();
+    setLastHydrationUpdate(now);
     setWaterIntake(prev => {
       const dayWater = prev[date] || { V: 0, M: 0 };
       newAmount = Math.max(0, dayWater[profile] + delta);
@@ -256,6 +260,8 @@ const App: React.FC = () => {
       if (r) setRecipes(r as any);
       if (p) setMealPlan(p as any);
       if (w) setWaterIntake(w as any);
+      const lastUpdate = await getDataLocal('last_hydration_update');
+      if (lastUpdate) setLastHydrationUpdate(lastUpdate as number);
       if (t) setTravelChecklist(t as any);
       setIsLoading(false);
     };
@@ -372,6 +378,36 @@ const App: React.FC = () => {
     }
   };
 
+  // Notification Logic
+  const sendNotification = useCallback((title: string, body: string) => {
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "granted") {
+      new Notification(title, { body, icon: '/favicon.ico' });
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          new Notification(title, { body, icon: '/favicon.ico' });
+        }
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (lastHydrationUpdate) {
+        const oneHour = 60 * 60 * 1000;
+        if (Date.now() - lastHydrationUpdate > oneHour) {
+          sendNotification("Hydration Reminder", "It's been over an hour since your last water update. Stay hydrated!");
+          // Reset last update to avoid spamming every interval check, 
+          // or we could just let it fire until they update.
+          // Let's set it to now so it waits another hour.
+          setLastHydrationUpdate(Date.now());
+        }
+      }
+    }, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, [lastHydrationUpdate, sendNotification]);
+
   if (isLoading) return <div className="flex items-center justify-center min-h-[100dvh] bg-green-50"><RefreshCw className="w-8 h-8 text-green-600 animate-spin" /></div>;
 
   if (!sbConfig) {
@@ -457,7 +493,16 @@ const App: React.FC = () => {
                     <Droplets className="w-5 h-5 text-blue-500" />
                     <h2 className="text-sm font-black text-blue-900 uppercase tracking-widest">Hydration</h2>
                   </div>
-                  <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">Goal 2.5L</span>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => sendNotification("Hydration Check", "Time to drink some water!")}
+                      className="w-8 h-8 bg-white border border-blue-100 rounded-xl flex items-center justify-center text-blue-500 shadow-sm active:scale-95 transition-all"
+                      title="Send Reminder"
+                    >
+                      <Bell className="w-4 h-4" />
+                    </button>
+                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">Goal 2.5L</span>
+                  </div>
                 </div>
 
                 <div className="space-y-6">
