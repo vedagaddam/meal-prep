@@ -79,6 +79,7 @@ const App: React.FC = () => {
   const [mealPlan, setMealPlan] = useState<MealPlan>({});
   const [waterIntake, setWaterIntake] = useState<WaterIntake>({});
   const [lastHydrationUpdate, setLastHydrationUpdate] = useState<number | null>(null);
+  const [pushSubscription, setPushSubscription] = useState<PushSubscription | null>(null);
   const notificationChannelRef = useRef<any>(null);
   const [travelChecklist, setTravelChecklist] = useState<TravelChecklistItem[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -390,36 +391,22 @@ const App: React.FC = () => {
   };
 
   // Notification Logic
-  const sendNotification = useCallback((title: string, body: string, broadcast = true) => {
-    if (!("Notification" in window)) return;
-    
-    const triggerLocal = () => {
-      if (Notification.permission === "granted") {
-        // Use Service Worker for better background reliability on iOS
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.ready.then(registration => {
-            registration.showNotification(title, {
-              body,
-              icon: '/favicon.ico',
-              badge: '/favicon.ico',
-              vibrate: [200, 100, 200]
-            });
+  const sendNotification = useCallback(async (title: string, body: string, broadcast = true) => {
+    // 1. Local Notification (if app is open)
+    if ("Notification" in window && Notification.permission === "granted") {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(registration => {
+          registration.showNotification(title, {
+            body,
+            icon: '/favicon.ico',
+            badge: '/favicon.ico',
+            vibrate: [200, 100, 200]
           });
-        } else {
-          new Notification(title, { body, icon: '/favicon.ico' });
-        }
+        });
       }
-    };
-
-    if (Notification.permission === "granted") {
-      triggerLocal();
-    } else if (Notification.permission !== "denied") {
-      Notification.requestPermission().then(permission => {
-        if (permission === "granted") triggerLocal();
-      });
     }
 
-    // Broadcast to other devices
+    // 2. Broadcast to other devices (via Realtime if app is open)
     if (broadcast && notificationChannelRef.current) {
       notificationChannelRef.current.send({
         type: 'broadcast',
@@ -427,7 +414,79 @@ const App: React.FC = () => {
         payload: { title, body }
       });
     }
-  }, []);
+
+    // 3. Web Push (via Backend if app is CLOSED)
+    if (broadcast && supabase) {
+      try {
+        const { data: subs } = await supabase.from('push_subscriptions').select('subscription');
+        if (subs) {
+          await Promise.all(subs.map(async (s: any) => {
+            // Don't send push to ourselves if we're active (optional, but safer to just send to all)
+            await fetch('/api/push/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                subscription: s.subscription,
+                title,
+                body
+              })
+            });
+          }));
+        }
+      } catch (err) {
+        console.error('Push error:', err);
+      }
+    }
+  }, [supabase]);
+
+  // Push Subscription Setup
+  useEffect(() => {
+    const subscribeToPush = async () => {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const existingSub = await registration.pushManager.getSubscription();
+        
+        if (existingSub) {
+          setPushSubscription(existingSub);
+          return;
+        }
+
+        const vapidPublicKey = 'BHxQBYCzfC83A_xFfFdpXMNMsbxmA1hwJWe00MC6m8Z8k-MQfqWvCqt4khMoUsqmz-CT3Ia2_MY7bjT7IwouJs8';
+        const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+
+        const newSub = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedVapidKey
+        });
+
+        setPushSubscription(newSub);
+        
+        if (supabase) {
+          await supabase.from('push_subscriptions').upsert({
+            user_id: user?.id || PUBLIC_USER_ID,
+            subscription: newSub
+          }, { onConflict: 'user_id,subscription' });
+        }
+      } catch (err) {
+        console.error('Push subscription error:', err);
+      }
+    };
+
+    if (supabase && !isLoading) subscribeToPush();
+  }, [supabase, user, isLoading]);
+
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
 
   // Set up Realtime Channel
   useEffect(() => {

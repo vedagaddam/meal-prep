@@ -37,6 +37,24 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+self.addEventListener('push', (event) => {
+  const data = event.data.json();
+  const title = data.title || 'Hydration Reminder';
+  const options = {
+    body: data.body || 'Time to drink some water!',
+    icon: '/favicon.ico',
+    badge: '/favicon.ico',
+    vibrate: [200, 100, 200],
+    data: {
+      url: '/'
+    }
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
+});
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
