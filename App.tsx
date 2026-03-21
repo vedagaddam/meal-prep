@@ -79,6 +79,7 @@ const App: React.FC = () => {
   const [mealPlan, setMealPlan] = useState<MealPlan>({});
   const [waterIntake, setWaterIntake] = useState<WaterIntake>({});
   const [lastHydrationUpdate, setLastHydrationUpdate] = useState<number | null>(null);
+  const notificationChannelRef = useRef<any>(null);
   const [travelChecklist, setTravelChecklist] = useState<TravelChecklistItem[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
@@ -223,6 +224,16 @@ const App: React.FC = () => {
     let newAmount = 0;
     const now = Date.now();
     setLastHydrationUpdate(now);
+    
+    // Broadcast update to other devices
+    if (notificationChannelRef.current) {
+      notificationChannelRef.current.send({
+        type: 'broadcast',
+        event: 'water_updated',
+        payload: { timestamp: now }
+      });
+    }
+
     setWaterIntake(prev => {
       const dayWater = prev[date] || { V: 0, M: 0 };
       newAmount = Math.max(0, dayWater[profile] + delta);
@@ -379,8 +390,10 @@ const App: React.FC = () => {
   };
 
   // Notification Logic
-  const sendNotification = useCallback((title: string, body: string) => {
+  const sendNotification = useCallback((title: string, body: string, broadcast = true) => {
     if (!("Notification" in window)) return;
+    
+    // Trigger local notification
     if (Notification.permission === "granted") {
       new Notification(title, { body, icon: '/favicon.ico' });
     } else if (Notification.permission !== "denied") {
@@ -390,7 +403,45 @@ const App: React.FC = () => {
         }
       });
     }
+
+    // Broadcast to other devices
+    if (broadcast && notificationChannelRef.current) {
+      notificationChannelRef.current.send({
+        type: 'broadcast',
+        event: 'reminder',
+        payload: { title, body }
+      });
+    }
   }, []);
+
+  // Set up Realtime Channel
+  useEffect(() => {
+    if (!supabase) return;
+
+    const channel = supabase.channel('notifications', {
+      config: {
+        broadcast: { self: true } // Receive our own broadcasts to test/sync
+      }
+    });
+
+    channel
+      .on('broadcast', { event: 'reminder' }, (payload) => {
+        const { title, body } = payload.payload;
+        // Send local notification (don't broadcast back)
+        sendNotification(title, body, false);
+      })
+      .on('broadcast', { event: 'water_updated' }, (payload) => {
+        const { timestamp } = payload.payload;
+        setLastHydrationUpdate(timestamp);
+      })
+      .subscribe();
+
+    notificationChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, sendNotification]);
 
   useEffect(() => {
     const interval = setInterval(() => {
