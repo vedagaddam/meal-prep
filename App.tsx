@@ -261,7 +261,10 @@ const App: React.FC = () => {
         filterByUser(cloudWater).forEach((w: any) => {
           const dateStr = w.planned_date;
           if (!newWater[dateStr]) newWater[dateStr] = { V: 0, M: 0 };
-          newWater[dateStr][w.profile as UserProfile] = w.amount;
+          const profile = (w.profile || '').toUpperCase() as UserProfile;
+          if (profile === 'V' || profile === 'M') {
+            newWater[dateStr][profile] = w.amount;
+          }
         });
         return newWater;
       });
@@ -357,6 +360,27 @@ const App: React.FC = () => {
     });
     return () => subscription.unsubscribe();
   }, [supabase, fetchAndMergeCloudData, isLoading]);
+
+  useEffect(() => {
+    if (!supabase || !user) return;
+    
+    // Subscribe to real-time changes across all tables
+    const channel = supabase
+      .channel('db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'recipes' }, () => fetchAndMergeCloudData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meal_plans' }, () => fetchAndMergeCloudData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'water_intake' }, () => fetchAndMergeCloudData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'travel_checklist' }, () => fetchAndMergeCloudData())
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          addLog('Real-time sync active');
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, user, fetchAndMergeCloudData, addLog]);
 
   const handleSaveRecipe = async (recipe: Recipe) => {
     setRecipes(prev => {
@@ -508,13 +532,16 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-[100dvh] max-w-2xl mx-auto bg-white shadow-2xl relative overflow-hidden ios-safe-top">
-      {/* Top Floating Status */}
-      <div className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-end px-6 pt-4 max-w-2xl mx-auto pointer-events-none">
-        <div className="pointer-events-auto bg-white/80 backdrop-blur shadow-sm border border-gray-100 px-3 py-1.5 rounded-full flex items-center gap-2">
+      {/* Top Floating Status - Adjusted for safe areas */}
+      <div className="fixed top-10 left-0 right-0 z-[60] flex items-center justify-end px-6 max-w-2xl mx-auto pointer-events-none">
+        <button 
+          onClick={() => fetchAndMergeCloudData()}
+          className="pointer-events-auto bg-white/90 backdrop-blur shadow-md border border-gray-100 px-3 py-1.5 rounded-full flex items-center gap-2 active:scale-95 transition-transform"
+        >
           {syncStatus === 'syncing' ? <RefreshCw className="w-3 h-3 text-amber-500 animate-spin" /> : 
            syncStatus === 'synced' ? <Cloud className="w-3 h-3 text-green-600" /> : <CloudOff className="w-3 h-3 text-gray-400" />}
           <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{syncStatus}</span>
-        </div>
+        </button>
       </div>
 
       <main ref={scrollContainerRef} className="flex-1 overflow-y-auto scroll-momentum pb-32">
@@ -653,7 +680,7 @@ const HomeWaterItem: React.FC<{ profile: UserProfile; amount: number; onUpdate: 
         </div>
       </div>
       <div className="h-1.5 w-full bg-blue-100 rounded-full overflow-hidden relative">
-        <div className={`h-full bg-blue-500 transition-all duration-1000 ease-out`} style={{ width: `${progress}%` }}>
+        <div className={`h-full ${accentColor} transition-all duration-1000 ease-out`} style={{ width: `${progress}%` }}>
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-[shimmer_2s_infinite]" />
         </div>
       </div>

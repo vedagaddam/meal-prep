@@ -75,8 +75,9 @@ app.get('/api/stats', async (req: Request, res: Response) => {
 
     // Water
     waterData?.forEach((w: any) => {
-      if (w.profile === 'V') stats.v.water = w.amount;
-      if (w.profile === 'M') stats.m.water = w.amount;
+      const profile = (w.profile || '').toUpperCase();
+      if (profile === 'V') stats.v.water = w.amount;
+      if (profile === 'M') stats.m.water = w.amount;
     });
 
     // Macros from Meal Plan
@@ -88,7 +89,8 @@ app.get('/api/stats', async (req: Request, res: Response) => {
       meals.forEach((meal: any) => {
         const recipe = recipeMap.get(meal.recipeId);
         if (recipe) {
-          const target = meal.profile === 'V' ? stats.v : stats.m;
+          const profile = (meal.profile || '').toUpperCase();
+          const target = profile === 'V' ? stats.v : stats.m;
           target.protein += recipe.macros?.protein || 0;
           target.fiber += recipe.macros?.fiber || 0;
         }
