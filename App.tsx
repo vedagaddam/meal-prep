@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChefHat, ArrowRight, Plus, Database, ShieldCheck, RefreshCw, Cloud, CloudOff, User as UserIcon, Lock, AlertTriangle, UploadCloud, Zap, Carrot, Droplets, Minus, Bell } from 'lucide-react';
+import { ChefHat, ArrowRight, Plus, Database, RefreshCw, Cloud, CloudOff, User as UserIcon, Lock, AlertTriangle, UploadCloud, Carrot, Droplets, Minus } from 'lucide-react';
 import { createClient, User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import RecipesTab from './components/RecipesTab';
 import Navigation from './components/Navigation';
@@ -78,9 +78,6 @@ const App: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlan>({});
   const [waterIntake, setWaterIntake] = useState<WaterIntake>({});
-  const [lastHydrationUpdate, setLastHydrationUpdate] = useState<number | null>(null);
-  const [pushSubscription, setPushSubscription] = useState<PushSubscription | null>(null);
-  const notificationChannelRef = useRef<any>(null);
   const [travelChecklist, setTravelChecklist] = useState<TravelChecklistItem[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
@@ -90,8 +87,6 @@ const App: React.FC = () => {
   const [sbConfig, setSbConfig] = useState<{ url: string; key: string } | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'info' | 'error' | 'success' } | null>(null);
-  const [pushStatus, setPushStatus] = useState<'unsupported' | 'denied' | 'granted' | 'subscribed' | 'loading' | 'prompt'>('loading');
-  const [liveAlert, setLiveAlert] = useState<{ title: string; body: string } | null>(null);
 
   const showStatus = useCallback((text: string, type: 'info' | 'error' | 'success' = 'info') => {
     setStatusMessage({ text, type });
@@ -103,10 +98,14 @@ const App: React.FC = () => {
   // Global error handlers
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
+      // Ignore benign Vite HMR websocket errors
+      if (event.message?.includes('websocket') || event.message?.includes('HMR')) return;
       showStatus(`Error: ${event.message}`, "error");
     };
     const handleRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason instanceof Error ? event.reason.message : String(event.reason);
+      // Ignore benign Vite HMR websocket errors
+      if (reason?.includes('websocket') || reason?.includes('HMR')) return;
       showStatus(`Promise Error: ${reason}`, "error");
     };
     window.addEventListener('error', handleError);
@@ -162,7 +161,6 @@ const App: React.FC = () => {
   useEffect(() => { if (!isLoading) saveDataLocal('recipes', recipes); }, [recipes, isLoading]);
   useEffect(() => { if (!isLoading) saveDataLocal('mealplan', mealPlan); }, [mealPlan, isLoading]);
   useEffect(() => { if (!isLoading) saveDataLocal('water_intake', waterIntake); }, [waterIntake, isLoading]);
-  useEffect(() => { if (!isLoading && lastHydrationUpdate) saveDataLocal('last_hydration_update', lastHydrationUpdate); }, [lastHydrationUpdate, isLoading]);
   useEffect(() => { if (!isLoading) saveDataLocal('travel_checklist', travelChecklist); }, [travelChecklist, isLoading]);
 
   // Scroll to top when tab changes
@@ -277,18 +275,7 @@ const App: React.FC = () => {
 
   const handleUpdateWater = async (date: string, profile: UserProfile, delta: number) => {
     let newAmount = 0;
-    const now = Date.now();
-    setLastHydrationUpdate(now);
     
-    // Broadcast update to other devices
-    if (notificationChannelRef.current) {
-      notificationChannelRef.current.send({
-        type: 'broadcast',
-        event: 'water_updated',
-        payload: { timestamp: now }
-      });
-    }
-
     setWaterIntake(prev => {
       const dayWater = prev[date] || { V: 0, M: 0 };
       newAmount = Math.max(0, dayWater[profile] + delta);
@@ -326,8 +313,6 @@ const App: React.FC = () => {
       if (r) setRecipes(r as any);
       if (p) setMealPlan(p as any);
       if (w) setWaterIntake(w as any);
-      const lastUpdate = await getDataLocal('last_hydration_update');
-      if (lastUpdate) setLastHydrationUpdate(lastUpdate as number);
       if (t) setTravelChecklist(t as any);
       setIsLoading(false);
     };
@@ -444,312 +429,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Notification Logic
-  const sendNotification = useCallback(async (title: string, body: string, broadcast = true) => {
-    console.log('sendNotification called:', { title, body, broadcast });
-    
-    // 1. Local Notification (if app is open)
-    if (Notification.permission === "granted") {
-      try {
-        const registration = await navigator.serviceWorker.getRegistration();
-        if (registration) {
-          registration.showNotification(title, { body, icon: '/favicon.ico' });
-        } else {
-          new Notification(title, { body, icon: '/favicon.ico' });
-        }
-      } catch (e) {
-        console.warn('Local notification failed:', e);
-      }
-    }
-
-    // 2. Realtime Broadcast (to other OPEN apps)
-    if (broadcast && notificationChannelRef.current) {
-      console.log('Broadcasting via Supabase Realtime');
-      notificationChannelRef.current.send({
-        type: 'broadcast',
-        event: 'notification',
-        payload: { title, body, senderId: user?.id || PUBLIC_USER_ID }
-      });
-    }
-
-    // 3. Web Push (to CLOSED apps)
-    if (broadcast && supabase) {
-      try {
-        const { data: subs } = await supabase.from('push_subscriptions').select('subscription');
-        const otherSubs = subs?.filter(s => JSON.stringify(s.subscription) !== JSON.stringify(pushSubscription)) || [];
-
-        if (otherSubs.length > 0) {
-          showStatus(`Sending push to ${otherSubs.length} devices...`, "info");
-          await Promise.all(otherSubs.map(async (s: any) => {
-            await fetch('/api/push/send', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ subscription: s.subscription, title, body })
-            });
-          }));
-          showStatus("Push sent successfully", "success");
-        } else {
-          showStatus("No other devices subscribed for background push", "info");
-        }
-      } catch (err) {
-        console.error('Push error:', err);
-      }
-    }
-  }, [supabase, showStatus, pushSubscription, user]);
-
-  const testLocalNotification = async () => {
-    if (!("Notification" in window)) {
-      showStatus("Notifications not supported", "error");
-      return;
-    }
-    if (Notification.permission !== 'granted') {
-      const p = await Notification.requestPermission();
-      if (p !== 'granted') {
-        showStatus("Permission denied. Enable in iOS settings.", "error");
-        return;
-      }
-    }
-    new Notification("Test Notification", { body: "If you see this, local notifications are working!" });
-    showStatus("Local test sent!", "success");
-  };
-
-  // Push Status Check
-  const checkPushStatus = useCallback(async () => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      setPushStatus('unsupported');
-      return;
-    }
-    
-    const permission = Notification.permission;
-    if (permission === 'granted') {
-      setPushStatus('granted');
-      try {
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (reg) {
-          const sub = await reg.pushManager.getSubscription();
-          if (sub) {
-            setPushSubscription(sub);
-            setPushStatus('subscribed');
-            
-            // Sync with Supabase
-            if (supabase && !isLoading) {
-              supabase.from('push_subscriptions').upsert({
-                user_id: user?.id || PUBLIC_USER_ID,
-                subscription: JSON.parse(JSON.stringify(sub))
-              }, { onConflict: 'user_id,subscription' });
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Status check error:", e);
-      }
-    } else if (permission === 'denied') {
-      setPushStatus('denied');
-    } else {
-      setPushStatus('prompt'); // Ready to ask
-    }
-  }, [supabase, user, isLoading]);
-
-  // Push Subscription Setup
-  const subscribeToPush = useCallback(async () => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      console.log('Push notifications not supported in this browser');
-      setPushStatus('unsupported');
-      return;
-    }
-
-    setPushStatus('loading');
-    showStatus("Step 1: Requesting permission...", "info");
-    try {
-      // Request permission explicitly
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        console.warn('Notification permission denied');
-        setPushStatus('denied');
-        showStatus("Permission denied. Please enable in settings.", "error");
-        return;
-      }
-
-      setPushStatus('granted');
-      showStatus("Step 2: Finding service worker...", "info");
-      
-      // Use getRegistration() as it's often more reliable on iOS than .ready
-      const registration = await navigator.serviceWorker.getRegistration() || await navigator.serviceWorker.ready;
-      
-      if (!registration) {
-        throw new Error("Service worker registration not found.");
-      }
-
-      showStatus("Step 3: Checking existing subscription...", "info");
-      const existingSub = await registration.pushManager.getSubscription();
-      
-      let subToStore = existingSub;
-
-      if (!existingSub) {
-        showStatus("Step 4: Generating new device key...", "info");
-        const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-        if (!vapidPublicKey) {
-          throw new Error("VAPID Public Key missing in environment.");
-        }
-        const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
-
-        subToStore = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: convertedVapidKey
-        });
-      }
-
-      setPushSubscription(subToStore);
-      setPushStatus('subscribed');
-      
-      if (supabase && subToStore) {
-        showStatus("Step 5: Saving to cloud database...", "info");
-        console.log('Storing push subscription in Supabase');
-        
-        // Use a clean JSON object for the subscription
-        const cleanSub = JSON.parse(JSON.stringify(subToStore));
-        
-        const { error } = await supabase.from('push_subscriptions').upsert({
-          user_id: user?.id || PUBLIC_USER_ID,
-          subscription: cleanSub
-        }, { onConflict: 'user_id,subscription' });
-        
-        if (error) {
-          console.error('Error storing subscription:', error);
-          showStatus(`Cloud save failed: ${error.message}`, "error");
-        } else {
-          showStatus("Step 6: Success! Device registered.", "success");
-        }
-      }
-    } catch (err) {
-      console.error('Push subscription error:', err);
-      setPushStatus('granted');
-      const msg = err instanceof Error ? err.message : String(err);
-      showStatus(`Failed at ${pushStatus}: ${msg}`, "error");
-    }
-  }, [supabase, user, showStatus, pushStatus]);
-
-  useEffect(() => {
-    // Check initial status
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      setPushStatus('unsupported');
-    } else if (Notification.permission === 'granted') {
-      setPushStatus('granted');
-      // Try to get existing sub quietly or re-subscribe if needed
-      navigator.serviceWorker.getRegistration().then(reg => {
-        if (reg) return reg.pushManager.getSubscription();
-        return null;
-      }).then(sub => {
-        if (sub) {
-          setPushSubscription(sub);
-          setPushStatus('subscribed');
-          // Ensure it's in Supabase if we have a user/supabase
-          if (supabase && !isLoading) {
-            supabase.from('push_subscriptions').upsert({
-              user_id: user?.id || PUBLIC_USER_ID,
-              subscription: JSON.parse(JSON.stringify(sub))
-            }, { onConflict: 'user_id,subscription' });
-          }
-        } else if (supabase && !isLoading) {
-          // Permission is granted but no subscription exists, try to create it automatically
-          // Only if we are not already loading/syncing
-          subscribeToPush();
-        }
-      });
-    } else if (Notification.permission === 'denied') {
-      setPushStatus('denied');
-    } else {
-      setPushStatus('loading'); // Default/Prompt state
-    }
-  }, [supabase, user, isLoading, subscribeToPush]);
-
-  function urlBase64ToUint8Array(base64String: string) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  }
-
-  // Set up Realtime Channel
-  useEffect(() => {
-    if (!supabase) return;
-
-    const channel = supabase.channel('notifications', {
-      config: {
-        broadcast: { self: false } // Don't receive our own broadcasts to avoid duplicates
-      }
-    });
-
-    channel
-      .on('broadcast', { event: 'notification' }, (payload) => {
-        console.log('Received broadcast notification:', payload);
-        const { title, body, senderId } = payload.payload;
-        
-        if (senderId !== (user?.id || PUBLIC_USER_ID)) {
-          // Show in-app alert
-          setLiveAlert({ title, body });
-          setTimeout(() => setLiveAlert(null), 8000);
-          
-          // Also try local notification
-          if (Notification.permission === 'granted') {
-            new Notification(title, { body });
-          }
-        }
-      })
-      .on('broadcast', { event: 'reminder' }, (payload) => {
-        const { title, body } = payload.payload;
-        // Send local notification (don't broadcast back)
-        sendNotification(title, body, false);
-      })
-      .on('broadcast', { event: 'timer_reset' }, (payload) => {
-        const { timestamp } = payload.payload;
-        setLastHydrationUpdate(timestamp);
-      })
-      .on('broadcast', { event: 'water_updated' }, (payload) => {
-        const { timestamp } = payload.payload;
-        setLastHydrationUpdate(timestamp);
-      })
-      .subscribe();
-
-    notificationChannelRef.current = channel;
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [supabase, sendNotification]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (lastHydrationUpdate) {
-        const oneHour = 60 * 60 * 1000;
-        const now = Date.now();
-        if (now - lastHydrationUpdate > oneHour) {
-          const title = "Hydration Reminder";
-          const body = "It's been over an hour since your last water update. Stay hydrated!";
-          
-          sendNotification(title, body, true);
-          
-          // Reset timer locally
-          setLastHydrationUpdate(now);
-          
-          // Broadcast timer reset to other devices so they don't fire too
-          if (notificationChannelRef.current) {
-            notificationChannelRef.current.send({
-              type: 'broadcast',
-              event: 'timer_reset',
-              payload: { timestamp: now }
-            });
-          }
-        }
-      }
-    }, 30000); // Check every 30 seconds for better accuracy
-    return () => clearInterval(interval);
-  }, [lastHydrationUpdate, sendNotification]);
-
   if (isLoading) return <div className="flex items-center justify-center min-h-[100dvh] bg-green-50"><RefreshCw className="w-8 h-8 text-green-600 animate-spin" /></div>;
 
   if (!sbConfig) {
@@ -828,88 +507,6 @@ const App: React.FC = () => {
                  </div>
               </div>
 
-              {/* Push Notification Settings - Crucial for iOS */}
-              <section className="bg-white border border-gray-100 rounded-[2.5rem] p-6 space-y-4 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-amber-500" />
-                    <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest">Push Status</h2>
-                  </div>
-                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
-                    pushStatus === 'subscribed' ? 'bg-green-100 text-green-700' :
-                    pushStatus === 'denied' ? 'bg-red-100 text-red-700' :
-                    pushStatus === 'unsupported' ? 'bg-gray-100 text-gray-700' :
-                    pushStatus === 'prompt' ? 'bg-blue-100 text-blue-700' :
-                    'bg-amber-100 text-amber-700'
-                  }`}>
-                    {pushStatus === 'prompt' ? 'Ready' : pushStatus}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <p className="text-xs text-gray-500 leading-relaxed">
-                    {pushStatus === 'subscribed' 
-                      ? "This device is registered for background alerts."
-                      : pushStatus === 'denied'
-                      ? "Notifications are blocked. If you enabled them in iOS settings, please RESTART the app."
-                      : "Enable notifications to receive hydration reminders even when the app is closed."}
-                  </p>
-                  
-                  <div className="grid grid-cols-2 gap-2">
-                    <button 
-                      onClick={subscribeToPush}
-                      className="bg-green-600 text-white py-3 rounded-2xl font-bold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
-                    >
-                      <Bell className="w-4 h-4" />
-                      {pushStatus === 'subscribed' ? 'Subscribed' : 'Enable Push'}
-                    </button>
-
-                    <button 
-                      onClick={testLocalNotification}
-                      className="bg-white border border-gray-200 text-gray-600 py-3 rounded-2xl font-bold text-xs shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
-                    >
-                      <Zap className="w-4 h-4 text-amber-500" />
-                      Test Local
-                    </button>
-                  </div>
-
-                  {pushStatus === 'denied' && (
-                    <button 
-                      onClick={checkPushStatus}
-                      className="w-full text-gray-400 py-2 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      Force Re-check Status
-                    </button>
-                  )}
-
-                  {pushStatus === 'subscribed' && (
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-green-600 bg-green-50 p-3 rounded-xl border border-green-100">
-                      <ShieldCheck className="w-4 h-4" />
-                      Verified: Device ID stored in cloud
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              {/* Live Alert Banner */}
-              {liveAlert && (
-                <div className="fixed top-4 left-4 right-4 z-[100] animate-bounce">
-                  <div className="bg-blue-600 text-white p-4 rounded-3xl shadow-2xl border-2 border-white flex items-center gap-4">
-                    <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                      <Bell className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-black text-sm">{liveAlert.title}</h3>
-                      <p className="text-xs opacity-90">{liveAlert.body}</p>
-                    </div>
-                    <button onClick={() => setLiveAlert(null)} className="ml-auto text-white/50">
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* Water Intake Station - High Visibility */}
               <section className="bg-blue-50/70 border border-blue-100 rounded-[2.5rem] p-6 space-y-5 shadow-sm">
                 <div className="flex items-center justify-between">
@@ -918,16 +515,6 @@ const App: React.FC = () => {
                     <h2 className="text-sm font-black text-blue-900 uppercase tracking-widest">Hydration</h2>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => {
-                        console.log('Bell button clicked');
-                        sendNotification("Hydration Check", "Time to drink some water!");
-                      }}
-                      className="w-8 h-8 bg-white border border-blue-100 rounded-xl flex items-center justify-center text-blue-500 shadow-sm active:scale-95 transition-all"
-                      title="Send Reminder"
-                    >
-                      <Bell className="w-4 h-4" />
-                    </button>
                     <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">Goal 2.5L</span>
                   </div>
                 </div>
@@ -981,7 +568,7 @@ const App: React.FC = () => {
           statusMessage.type === 'success' ? 'bg-emerald-600 text-white' : 
           'bg-blue-600 text-white'
         }`}>
-          {statusMessage.type === 'error' ? <AlertTriangle className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
+          {statusMessage.type === 'error' ? <AlertTriangle className="w-5 h-5" /> : <RefreshCw className="w-5 h-5" />}
           <p className="text-xs font-bold tracking-tight">{statusMessage.text}</p>
           <button onClick={() => setStatusMessage(null)} className="ml-auto p-1 hover:bg-white/20 rounded-lg transition-colors">
             <Plus className="w-4 h-4 rotate-45" />
