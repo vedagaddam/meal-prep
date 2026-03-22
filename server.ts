@@ -1,5 +1,4 @@
 import express, { Request, Response } from 'express';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import bodyParser from 'body-parser';
 import cors from 'cors';
@@ -29,7 +28,8 @@ app.get('/api/health', (req: Request, res: Response) => {
   res.json({ 
     status: 'ok',
     supabaseConfigured: !!(process.env.VITE_SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY)),
-    widgetKeyConfigured: !!process.env.WIDGET_SECRET_KEY
+    widgetKeyConfigured: !!process.env.WIDGET_SECRET_KEY,
+    env: process.env.NODE_ENV
   });
 });
 
@@ -104,6 +104,7 @@ app.get('/api/stats', async (req: Request, res: Response) => {
 
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
