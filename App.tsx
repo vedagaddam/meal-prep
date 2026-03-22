@@ -882,6 +882,13 @@ const App: React.FC = () => {
                       Force Re-check Status
                     </button>
                   )}
+
+                  {pushStatus === 'subscribed' && (
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-green-600 bg-green-50 p-3 rounded-xl border border-green-100">
+                      <ShieldCheck className="w-4 h-4" />
+                      Verified: Device ID stored in cloud
+                    </div>
+                  )}
                 </div>
               </section>
 
@@ -902,13 +909,6 @@ const App: React.FC = () => {
                   </div>
                 </div>
               )}
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-green-600 bg-green-50 p-3 rounded-xl border border-green-100">
-                      <ShieldCheck className="w-4 h-4" />
-                      Verified: Device ID stored in cloud
-                    </div>
-                  )}
-                </div>
-              </section>
 
               {/* Water Intake Station - High Visibility */}
               <section className="bg-blue-50/70 border border-blue-100 rounded-[2.5rem] p-6 space-y-5 shadow-sm">
