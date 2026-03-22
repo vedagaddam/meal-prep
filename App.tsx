@@ -189,47 +189,45 @@ const App: React.FC = () => {
   }, [mealPlan, recipes, todayKey]);
 
   const fetchAndMergeCloudData = useCallback(async () => {
-    if (!supabase) return;
+    if (!supabase || isLoading) return;
     setSyncStatus('syncing');
     try {
+      const currentUserId = user?.id || PUBLIC_USER_ID;
       const [{ data: cloudRecipes }, { data: cloudPlans }, { data: cloudWater }, { data: cloudTravel }] = await Promise.all([
-        supabase.from('recipes').select('*'),
-        supabase.from('meal_plans').select('*'),
-        supabase.from('water_intake').select('*'),
-        supabase.from('travel_checklist').select('*')
+        supabase.from('recipes').select('*').eq('user_id', currentUserId),
+        supabase.from('meal_plans').select('*').eq('user_id', currentUserId),
+        supabase.from('water_intake').select('*').eq('user_id', currentUserId),
+        supabase.from('travel_checklist').select('*').eq('user_id', currentUserId)
       ]);
 
-      setRecipes(prevLocal => {
-        const recipeMap = new Map<string, Recipe>();
-        prevLocal.forEach(r => recipeMap.set(r.id, { ...r, synced: false }));
-        // Fix: Cast cloudRecipes to any[] to avoid 'unknown' iteration issues
-        (cloudRecipes as any[])?.forEach((r: any) => {
-          recipeMap.set(r.id, {
-            id: r.id,
-            name: r.name,
-            type: r.type || 'Regular',
-            difficulty: r.difficulty,
-            ingredients: r.ingredients,
-            prepTasks: r.prep_tasks || [], // FIXED: renamed from prep_tasks to prepTasks to satisfy TS2561
-            macros: r.macros,
-            synced: true
+      if (cloudRecipes) {
+        setRecipes(prevLocal => {
+          const recipeMap = new Map<string, Recipe>();
+          prevLocal.forEach(r => recipeMap.set(r.id, { ...r, synced: false }));
+          (cloudRecipes as any[])?.forEach((r: any) => {
+            recipeMap.set(r.id, {
+              id: r.id,
+              name: r.name,
+              type: r.type || 'Regular',
+              difficulty: r.difficulty,
+              ingredients: r.ingredients,
+              prepTasks: r.prep_tasks || [],
+              macros: r.macros,
+              synced: true
+            });
           });
+          return Array.from(recipeMap.values());
         });
-        const final = Array.from(recipeMap.values());
-        saveDataLocal('recipes', final);
-        return final;
-      });
+      }
 
       if (cloudPlans) {
         setMealPlan(prev => {
           const newPlan = { ...prev };
-          // Fix: Cast cloudPlans to any[]
           (cloudPlans as any[]).forEach((p: any) => {
             const dateStr = p.planned_date;
             if (!newPlan[dateStr]) newPlan[dateStr] = {};
             newPlan[dateStr][p.slot] = p.meals;
           });
-          saveDataLocal('mealplan', newPlan);
           return newPlan;
         });
       }
@@ -237,13 +235,11 @@ const App: React.FC = () => {
       if (cloudWater) {
         setWaterIntake(prev => {
           const newWater = { ...prev };
-          // Fix: Cast cloudWater to any[]
           (cloudWater as any[]).forEach((w: any) => {
             const dateStr = w.planned_date;
             if (!newWater[dateStr]) newWater[dateStr] = { V: 0, M: 0 };
             newWater[dateStr][w.profile as UserProfile] = w.amount;
           });
-          saveDataLocal('water_intake', newWater);
           return newWater;
         });
       }
@@ -251,7 +247,7 @@ const App: React.FC = () => {
       if (cloudTravel) {
         setTravelChecklist(prevLocal => {
           const itemMap = new Map<string, TravelChecklistItem>();
-          // Use cloud data as source of truth
+          prevLocal.forEach(i => itemMap.set(i.id, { ...i, synced: false }));
           (cloudTravel as any[]).forEach((i: any) => {
             itemMap.set(i.id, {
               id: i.id,
@@ -262,16 +258,15 @@ const App: React.FC = () => {
               synced: true
             });
           });
-          const final = Array.from(itemMap.values());
-          saveDataLocal('travel_checklist', final);
-          return final;
+          return Array.from(itemMap.values());
         });
       }
       setSyncStatus('synced');
     } catch (err) {
+      console.error('Sync Error:', err);
       setSyncStatus('error');
     }
-  }, [supabase]);
+  }, [supabase, isLoading, user]);
 
   const handleUpdateWater = async (date: string, profile: UserProfile, delta: number) => {
     let newAmount = 0;
@@ -320,13 +315,19 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!isLoading && supabase) {
+      fetchAndMergeCloudData();
+    }
+  }, [isLoading, supabase, fetchAndMergeCloudData]);
+
+  useEffect(() => {
     if (!supabase) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      fetchAndMergeCloudData();
+      if (!isLoading) fetchAndMergeCloudData();
     });
     return () => subscription.unsubscribe();
-  }, [supabase, fetchAndMergeCloudData]);
+  }, [supabase, fetchAndMergeCloudData, isLoading]);
 
   const handleSaveRecipe = async (recipe: Recipe) => {
     setRecipes(prev => {
