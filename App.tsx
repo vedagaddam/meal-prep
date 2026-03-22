@@ -78,6 +78,8 @@ const App: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlan>({});
   const [waterIntake, setWaterIntake] = useState<WaterIntake>({});
+  const waterIntakeRef = useRef(waterIntake);
+  useEffect(() => { waterIntakeRef.current = waterIntake; }, [waterIntake]);
   const [travelChecklist, setTravelChecklist] = useState<TravelChecklistItem[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
@@ -200,17 +202,16 @@ const App: React.FC = () => {
     try {
       const currentUserId = user?.id || PUBLIC_USER_ID;
       
-      // Fetch data. We try to be resilient to missing user_id columns or legacy data.
+      // Fetch data ordered by created_at so that the latest updates win during merge
       const [rRes, pRes, wRes, tRes] = await Promise.all([
-        supabase.from('recipes').select('*'),
-        supabase.from('meal_plans').select('*'),
-        supabase.from('water_intake').select('*'),
-        supabase.from('travel_checklist').select('*')
+        supabase.from('recipes').select('*').order('created_at', { ascending: true }),
+        supabase.from('meal_plans').select('*').order('created_at', { ascending: true }),
+        supabase.from('water_intake').select('*').order('created_at', { ascending: true }),
+        supabase.from('travel_checklist').select('*').order('created_at', { ascending: true })
       ]);
 
       if (rRes.error || pRes.error || wRes.error || tRes.error) {
         addLog(`Fetch error: ${rRes.error?.message || pRes.error?.message || wRes.error?.message || tRes.error?.message}`);
-        // If it's a "column not found" error, we might be using an old schema
       }
 
       const cloudRecipes = rRes.data || [];
@@ -233,7 +234,6 @@ const App: React.FC = () => {
           });
         });
         const merged = Array.from(recipeMap.values());
-        // Migration: Push local-only or legacy recipes to cloud with user_id
         merged.filter(r => !r.synced).forEach(async (r) => {
           await supabase.from('recipes').upsert({
             id: r.id, name: r.name, type: r.type, difficulty: r.difficulty,
@@ -258,14 +258,20 @@ const App: React.FC = () => {
       // Merge Water Intake
       setWaterIntake(prev => {
         const newWater = { ...prev };
-        filterByUser(cloudWater).forEach((w: any) => {
+        const filteredWater = filterByUser(cloudWater);
+        
+        filteredWater.forEach((w: any) => {
           const dateStr = w.planned_date;
           if (!newWater[dateStr]) newWater[dateStr] = { V: 0, M: 0 };
           const profile = (w.profile || '').toUpperCase() as UserProfile;
           if (profile === 'V' || profile === 'M') {
             newWater[dateStr][profile] = w.amount;
+            if (profile === 'V' && dateStr === todayKey) {
+              addLog(`V Water Sync: ${w.amount}ml`);
+            }
           }
         });
+        waterIntakeRef.current = newWater;
         return newWater;
       });
 
@@ -289,18 +295,19 @@ const App: React.FC = () => {
       setSyncStatus('error');
       addLog(`Sync failed: ${err.message}`);
     }
-  }, [supabase, isLoading, user, addLog]);
+  }, [supabase, isLoading, user, addLog, todayKey]);
 
   const handleUpdateWater = async (date: string, profile: UserProfile, delta: number) => {
-    let newAmount = 0;
+    const currentAmount = waterIntakeRef.current[date]?.[profile] || 0;
+    const newAmount = Math.max(0, currentAmount + delta);
     
-    setWaterIntake(prev => {
-      const dayWater = prev[date] || { V: 0, M: 0 };
-      newAmount = Math.max(0, dayWater[profile] + delta);
-      const updated = { ...prev, [date]: { ...dayWater, [profile]: newAmount } };
-      saveDataLocal('water_intake', updated); // Immediate local save
-      return updated;
-    });
+    // Update local state and ref immediately
+    const updated = {
+      ...waterIntakeRef.current,
+      [date]: { ...(waterIntakeRef.current[date] || { V: 0, M: 0 }), [profile]: newAmount }
+    };
+    waterIntakeRef.current = updated;
+    setWaterIntake(updated);
 
     if (supabase) {
       try {
@@ -316,6 +323,7 @@ const App: React.FC = () => {
           setSyncStatus('error');
         } else {
           setSyncStatus('synced');
+          if (profile === 'V') addLog(`V Water Saved: ${newAmount}ml`);
         }
       } catch (err: any) {
         addLog(`Water sync exception: ${err.message}`);
@@ -533,7 +541,7 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col h-[100dvh] max-w-2xl mx-auto bg-white shadow-2xl relative overflow-hidden ios-safe-top">
       {/* Top Floating Status - Adjusted for safe areas */}
-      <div className="fixed top-10 left-0 right-0 z-[60] flex items-center justify-end px-6 max-w-2xl mx-auto pointer-events-none">
+      <div className="fixed top-16 left-0 right-0 z-[60] flex items-center justify-end px-6 max-w-2xl mx-auto pointer-events-none">
         <button 
           onClick={() => fetchAndMergeCloudData()}
           className="pointer-events-auto bg-white/90 backdrop-blur shadow-md border border-gray-100 px-3 py-1.5 rounded-full flex items-center gap-2 active:scale-95 transition-transform"
