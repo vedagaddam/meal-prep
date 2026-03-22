@@ -17,13 +17,20 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // Initialize Supabase for server-side stats
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
+const getSupabase = () => {
+  const url = process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
+};
 
 // API routes
 app.get('/api/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok' });
+  res.json({ 
+    status: 'ok',
+    supabaseConfigured: !!(process.env.VITE_SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY)),
+    widgetKeyConfigured: !!process.env.WIDGET_SECRET_KEY
+  });
 });
 
 // Secure Stats API for Widget
@@ -31,12 +38,17 @@ app.get('/api/stats', async (req: Request, res: Response) => {
   const widgetKey = req.query.key || req.headers['x-widget-key'];
   const secretKey = process.env.WIDGET_SECRET_KEY;
 
-  if (!secretKey || widgetKey !== secretKey) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  if (!secretKey) {
+    return res.status(500).json({ error: 'Server: WIDGET_SECRET_KEY missing' });
   }
 
+  if (widgetKey !== secretKey) {
+    return res.status(401).json({ error: 'Unauthorized: Key mismatch' });
+  }
+
+  const supabase = getSupabase();
   if (!supabase) {
-    return res.status(500).json({ error: 'Supabase not configured on server' });
+    return res.status(500).json({ error: 'Server: Supabase keys missing' });
   }
 
   try {
