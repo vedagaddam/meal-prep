@@ -90,7 +90,8 @@ const App: React.FC = () => {
   const [sbConfig, setSbConfig] = useState<{ url: string; key: string } | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'info' | 'error' | 'success' } | null>(null);
-  const [pushStatus, setPushStatus] = useState<'unsupported' | 'denied' | 'granted' | 'subscribed' | 'loading'>('loading');
+  const [pushStatus, setPushStatus] = useState<'unsupported' | 'denied' | 'granted' | 'subscribed' | 'loading' | 'prompt'>('loading');
+  const [liveAlert, setLiveAlert] = useState<{ title: string; body: string } | null>(null);
 
   const showStatus = useCallback((text: string, type: 'info' | 'error' | 'success' = 'info') => {
     setStatusMessage({ text, type });
@@ -448,102 +449,106 @@ const App: React.FC = () => {
     console.log('sendNotification called:', { title, body, broadcast });
     
     // 1. Local Notification (if app is open)
-    if ("Notification" in window) {
-      if (Notification.permission === "default") {
-        try {
-          await Notification.requestPermission();
-        } catch (e) {
-          showStatus("Failed to request notification permission", "error");
-        }
-      }
-      
-      if (Notification.permission === "granted") {
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.ready.then(registration => {
-            registration.showNotification(title, {
-              body,
-              icon: '/favicon.ico',
-              badge: '/favicon.ico',
-              vibrate: [200, 100, 200]
-            } as any);
-          });
+    if (Notification.permission === "granted") {
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration) {
+          registration.showNotification(title, { body, icon: '/favicon.ico' });
         } else {
           new Notification(title, { body, icon: '/favicon.ico' });
         }
-      } else {
-        console.warn('Notification permission not granted:', Notification.permission);
-        showStatus(`Notification permission: ${Notification.permission}. Please enable in browser settings.`, "info");
+      } catch (e) {
+        console.warn('Local notification failed:', e);
       }
-    } else {
-      showStatus("Notifications not supported in this browser", "error");
     }
 
-    // 2. Broadcast to other devices (via Realtime if app is open)
+    // 2. Realtime Broadcast (to other OPEN apps)
     if (broadcast && notificationChannelRef.current) {
-      console.log('Broadcasting notification via Realtime');
+      console.log('Broadcasting via Supabase Realtime');
       notificationChannelRef.current.send({
         type: 'broadcast',
-        event: 'reminder',
-        payload: { title, body }
+        event: 'notification',
+        payload: { title, body, senderId: user?.id || PUBLIC_USER_ID }
       });
     }
 
-    // 3. Web Push (via Backend if app is CLOSED)
+    // 3. Web Push (to CLOSED apps)
     if (broadcast && supabase) {
       try {
-        console.log('Fetching push subscriptions from Supabase');
-        const { data: subs, error } = await supabase.from('push_subscriptions').select('subscription');
-        if (error) throw error;
-        
-        // Filter out current subscription to avoid sending to self
-        const otherSubs = subs?.filter(s => {
-          const subStr = JSON.stringify(s.subscription);
-          const currentSubStr = pushSubscription ? JSON.stringify(pushSubscription) : null;
-          return subStr !== currentSubStr;
-        }) || [];
+        const { data: subs } = await supabase.from('push_subscriptions').select('subscription');
+        const otherSubs = subs?.filter(s => JSON.stringify(s.subscription) !== JSON.stringify(pushSubscription)) || [];
 
         if (otherSubs.length > 0) {
-          console.log(`Sending push notifications to ${otherSubs.length} other subscriptions`);
           showStatus(`Sending push to ${otherSubs.length} devices...`, "info");
-          
-          let successCount = 0;
           await Promise.all(otherSubs.map(async (s: any) => {
-            try {
-              const response = await fetch('/api/push/send', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  subscription: s.subscription,
-                  title,
-                  body
-                })
-              });
-              if (response.ok) {
-                successCount++;
-              } else {
-                const errData = await response.json();
-                console.error('Push send failed for a subscription:', errData);
-              }
-            } catch (fetchErr) {
-              console.error('Fetch error for push send:', fetchErr);
-            }
+            await fetch('/api/push/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ subscription: s.subscription, title, body })
+            });
           }));
-          
-          if (successCount > 0) {
-            showStatus(`Successfully sent push to ${successCount} devices`, "success");
-          } else {
-            showStatus("Failed to send push notifications to any devices", "error");
-          }
+          showStatus("Push sent successfully", "success");
         } else {
-          console.log('No other push subscriptions found in Supabase');
-          showStatus("No other devices are currently subscribed.", "info");
+          showStatus("No other devices subscribed for background push", "info");
         }
       } catch (err) {
         console.error('Push error:', err);
-        showStatus(`Push error: ${err instanceof Error ? err.message : String(err)}`, "error");
       }
     }
-  }, [supabase, showStatus, pushSubscription]);
+  }, [supabase, showStatus, pushSubscription, user]);
+
+  const testLocalNotification = async () => {
+    if (!("Notification" in window)) {
+      showStatus("Notifications not supported", "error");
+      return;
+    }
+    if (Notification.permission !== 'granted') {
+      const p = await Notification.requestPermission();
+      if (p !== 'granted') {
+        showStatus("Permission denied. Enable in iOS settings.", "error");
+        return;
+      }
+    }
+    new Notification("Test Notification", { body: "If you see this, local notifications are working!" });
+    showStatus("Local test sent!", "success");
+  };
+
+  // Push Status Check
+  const checkPushStatus = useCallback(async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setPushStatus('unsupported');
+      return;
+    }
+    
+    const permission = Notification.permission;
+    if (permission === 'granted') {
+      setPushStatus('granted');
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) {
+            setPushSubscription(sub);
+            setPushStatus('subscribed');
+            
+            // Sync with Supabase
+            if (supabase && !isLoading) {
+              supabase.from('push_subscriptions').upsert({
+                user_id: user?.id || PUBLIC_USER_ID,
+                subscription: JSON.parse(JSON.stringify(sub))
+              }, { onConflict: 'user_id,subscription' });
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Status check error:", e);
+      }
+    } else if (permission === 'denied') {
+      setPushStatus('denied');
+    } else {
+      setPushStatus('prompt'); // Ready to ask
+    }
+  }, [supabase, user, isLoading]);
 
   // Push Subscription Setup
   const subscribeToPush = useCallback(async () => {
@@ -680,6 +685,21 @@ const App: React.FC = () => {
     });
 
     channel
+      .on('broadcast', { event: 'notification' }, (payload) => {
+        console.log('Received broadcast notification:', payload);
+        const { title, body, senderId } = payload.payload;
+        
+        if (senderId !== (user?.id || PUBLIC_USER_ID)) {
+          // Show in-app alert
+          setLiveAlert({ title, body });
+          setTimeout(() => setLiveAlert(null), 8000);
+          
+          // Also try local notification
+          if (Notification.permission === 'granted') {
+            new Notification(title, { body });
+          }
+        }
+      })
       .on('broadcast', { event: 'reminder' }, (payload) => {
         const { title, body } = payload.payload;
         // Send local notification (don't broadcast back)
@@ -819,35 +839,69 @@ const App: React.FC = () => {
                     pushStatus === 'subscribed' ? 'bg-green-100 text-green-700' :
                     pushStatus === 'denied' ? 'bg-red-100 text-red-700' :
                     pushStatus === 'unsupported' ? 'bg-gray-100 text-gray-700' :
+                    pushStatus === 'prompt' ? 'bg-blue-100 text-blue-700' :
                     'bg-amber-100 text-amber-700'
                   }`}>
-                    {pushStatus}
+                    {pushStatus === 'prompt' ? 'Ready' : pushStatus}
                   </div>
                 </div>
 
                 <div className="space-y-3">
                   <p className="text-xs text-gray-500 leading-relaxed">
                     {pushStatus === 'subscribed' 
-                      ? "This device is registered and ready to receive notifications even when the app is closed."
+                      ? "This device is registered for background alerts."
                       : pushStatus === 'denied'
-                      ? "Notifications are blocked. Please reset permissions in your browser/iOS settings to receive alerts."
-                      : pushStatus === 'unsupported'
-                      ? "Your browser doesn't support push notifications. On iPhone, make sure you've used 'Add to Home Screen'."
-                      : "To receive hydration reminders on this device, you need to enable push notifications."}
+                      ? "Notifications are blocked. If you enabled them in iOS settings, please RESTART the app."
+                      : "Enable notifications to receive hydration reminders even when the app is closed."}
                   </p>
                   
-                  {pushStatus !== 'subscribed' && pushStatus !== 'unsupported' && (
+                  <div className="grid grid-cols-2 gap-2">
                     <button 
                       onClick={subscribeToPush}
-                      disabled={pushStatus === 'loading'}
-                      className="w-full bg-green-600 text-white py-4 rounded-2xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="bg-green-600 text-white py-3 rounded-2xl font-bold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
                     >
-                      {pushStatus === 'loading' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
-                      Enable Notifications
+                      <Bell className="w-4 h-4" />
+                      {pushStatus === 'subscribed' ? 'Subscribed' : 'Enable Push'}
+                    </button>
+
+                    <button 
+                      onClick={testLocalNotification}
+                      className="bg-white border border-gray-200 text-gray-600 py-3 rounded-2xl font-bold text-xs shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Zap className="w-4 h-4 text-amber-500" />
+                      Test Local
+                    </button>
+                  </div>
+
+                  {pushStatus === 'denied' && (
+                    <button 
+                      onClick={checkPushStatus}
+                      className="w-full text-gray-400 py-2 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Force Re-check Status
                     </button>
                   )}
+                </div>
+              </section>
 
-                  {pushStatus === 'subscribed' && (
+              {/* Live Alert Banner */}
+              {liveAlert && (
+                <div className="fixed top-4 left-4 right-4 z-[100] animate-bounce">
+                  <div className="bg-blue-600 text-white p-4 rounded-3xl shadow-2xl border-2 border-white flex items-center gap-4">
+                    <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                      <Bell className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm">{liveAlert.title}</h3>
+                      <p className="text-xs opacity-90">{liveAlert.body}</p>
+                    </div>
+                    <button onClick={() => setLiveAlert(null)} className="ml-auto text-white/50">
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
                     <div className="flex items-center gap-2 text-[10px] font-bold text-green-600 bg-green-50 p-3 rounded-xl border border-green-100">
                       <ShieldCheck className="w-4 h-4" />
                       Verified: Device ID stored in cloud
