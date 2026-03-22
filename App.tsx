@@ -554,63 +554,75 @@ const App: React.FC = () => {
     }
 
     setPushStatus('loading');
+    showStatus("Step 1: Requesting permission...", "info");
     try {
       // Request permission explicitly
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
         console.warn('Notification permission denied');
         setPushStatus('denied');
-        showStatus("Notification permission denied. Push notifications disabled.", "info");
+        showStatus("Permission denied. Please enable in settings.", "error");
         return;
       }
 
       setPushStatus('granted');
-      const registration = await navigator.serviceWorker.ready;
+      showStatus("Step 2: Finding service worker...", "info");
+      
+      // Use getRegistration() as it's often more reliable on iOS than .ready
+      const registration = await navigator.serviceWorker.getRegistration() || await navigator.serviceWorker.ready;
+      
+      if (!registration) {
+        throw new Error("Service worker registration not found.");
+      }
+
+      showStatus("Step 3: Checking existing subscription...", "info");
       const existingSub = await registration.pushManager.getSubscription();
       
-      if (existingSub) {
-        setPushSubscription(existingSub);
-        setPushStatus('subscribed');
-        return;
+      let subToStore = existingSub;
+
+      if (!existingSub) {
+        showStatus("Step 4: Generating new device key...", "info");
+        const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+        if (!vapidPublicKey) {
+          throw new Error("VAPID Public Key missing in environment.");
+        }
+        const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+
+        subToStore = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedVapidKey
+        });
       }
 
-      const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-      if (!vapidPublicKey) {
-        console.warn('VITE_VAPID_PUBLIC_KEY is missing. Push subscription will fail.');
-        showStatus("VAPID Public Key missing. Cannot subscribe to push.", "error");
-        setPushStatus('granted'); // Still granted, just can't subscribe
-        return;
-      }
-      const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
-
-      const newSub = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: convertedVapidKey
-      });
-
-      setPushSubscription(newSub);
+      setPushSubscription(subToStore);
       setPushStatus('subscribed');
       
-      if (supabase) {
-        console.log('Storing new push subscription in Supabase');
+      if (supabase && subToStore) {
+        showStatus("Step 5: Saving to cloud database...", "info");
+        console.log('Storing push subscription in Supabase');
+        
+        // Use a clean JSON object for the subscription
+        const cleanSub = JSON.parse(JSON.stringify(subToStore));
+        
         const { error } = await supabase.from('push_subscriptions').upsert({
           user_id: user?.id || PUBLIC_USER_ID,
-          subscription: JSON.parse(JSON.stringify(newSub))
+          subscription: cleanSub
         }, { onConflict: 'user_id,subscription' });
         
         if (error) {
           console.error('Error storing subscription:', error);
-          showStatus(`Failed to save subscription: ${error.message}`, "error");
+          showStatus(`Cloud save failed: ${error.message}`, "error");
         } else {
-          showStatus("Successfully subscribed to push notifications!", "success");
+          showStatus("Step 6: Success! Device registered.", "success");
         }
       }
     } catch (err) {
       console.error('Push subscription error:', err);
       setPushStatus('granted');
-      showStatus(`Subscription failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      const msg = err instanceof Error ? err.message : String(err);
+      showStatus(`Failed at ${pushStatus}: ${msg}`, "error");
     }
-  }, [supabase, user, showStatus]);
+  }, [supabase, user, showStatus, pushStatus]);
 
   useEffect(() => {
     // Check initial status
@@ -619,11 +631,14 @@ const App: React.FC = () => {
     } else if (Notification.permission === 'granted') {
       setPushStatus('granted');
       // Try to get existing sub quietly or re-subscribe if needed
-      navigator.serviceWorker.ready.then(reg => reg.pushManager.getSubscription()).then(sub => {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (reg) return reg.pushManager.getSubscription();
+        return null;
+      }).then(sub => {
         if (sub) {
           setPushSubscription(sub);
           setPushStatus('subscribed');
-          // Ensure it's in Supabase
+          // Ensure it's in Supabase if we have a user/supabase
           if (supabase && !isLoading) {
             supabase.from('push_subscriptions').upsert({
               user_id: user?.id || PUBLIC_USER_ID,
@@ -631,7 +646,8 @@ const App: React.FC = () => {
             }, { onConflict: 'user_id,subscription' });
           }
         } else if (supabase && !isLoading) {
-          // Permission is granted but no subscription exists, try to create it
+          // Permission is granted but no subscription exists, try to create it automatically
+          // Only if we are not already loading/syncing
           subscribeToPush();
         }
       });
