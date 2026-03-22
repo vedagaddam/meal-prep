@@ -90,6 +90,7 @@ const App: React.FC = () => {
   const [sbConfig, setSbConfig] = useState<{ url: string; key: string } | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'info' | 'error' | 'success' } | null>(null);
+  const [pushStatus, setPushStatus] = useState<'unsupported' | 'denied' | 'granted' | 'subscribed' | 'loading'>('loading');
 
   const showStatus = useCallback((text: string, type: 'info' | 'error' | 'success' = 'info') => {
     setStatusMessage({ text, type });
@@ -538,62 +539,91 @@ const App: React.FC = () => {
   }, [supabase, showStatus]);
 
   // Push Subscription Setup
-  useEffect(() => {
-    const subscribeToPush = async () => {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        console.log('Push notifications not supported in this browser');
+  const subscribeToPush = useCallback(async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      console.log('Push notifications not supported in this browser');
+      setPushStatus('unsupported');
+      return;
+    }
+
+    setPushStatus('loading');
+    try {
+      // Request permission explicitly
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        console.warn('Notification permission denied');
+        setPushStatus('denied');
+        showStatus("Notification permission denied. Push notifications disabled.", "info");
         return;
       }
 
-      try {
-        // Request permission explicitly
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-          console.warn('Notification permission denied');
-          showStatus("Notification permission denied. Push notifications disabled.", "info");
-          return;
-        }
+      setPushStatus('granted');
+      const registration = await navigator.serviceWorker.ready;
+      const existingSub = await registration.pushManager.getSubscription();
+      
+      if (existingSub) {
+        setPushSubscription(existingSub);
+        setPushStatus('subscribed');
+        return;
+      }
 
-        const registration = await navigator.serviceWorker.ready;
-        const existingSub = await registration.pushManager.getSubscription();
+      const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) {
+        console.warn('VITE_VAPID_PUBLIC_KEY is missing. Push subscription will fail.');
+        showStatus("VAPID Public Key missing. Cannot subscribe to push.", "error");
+        setPushStatus('granted'); // Still granted, just can't subscribe
+        return;
+      }
+      const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+
+      const newSub = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedVapidKey
+      });
+
+      setPushSubscription(newSub);
+      setPushStatus('subscribed');
+      
+      if (supabase) {
+        console.log('Storing new push subscription in Supabase');
+        const { error } = await supabase.from('push_subscriptions').upsert({
+          user_id: user?.id || PUBLIC_USER_ID,
+          subscription: JSON.parse(JSON.stringify(newSub))
+        }, { onConflict: 'user_id,subscription' });
         
-        if (existingSub) {
-          setPushSubscription(existingSub);
-          return;
-        }
-
-        const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-        if (!vapidPublicKey) {
-          console.warn('VITE_VAPID_PUBLIC_KEY is missing. Push subscription will fail.');
-          showStatus("VAPID Public Key missing. Cannot subscribe to push.", "error");
-          return;
-        }
-        const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
-
-        const newSub = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: convertedVapidKey
-        });
-
-        setPushSubscription(newSub);
-        
-        if (supabase) {
-          const { error } = await supabase.from('push_subscriptions').upsert({
-            user_id: user?.id || PUBLIC_USER_ID,
-            subscription: newSub
-          }, { onConflict: 'user_id,subscription' });
-          
-          if (error) throw error;
+        if (error) {
+          console.error('Error storing subscription:', error);
+          showStatus(`Failed to save subscription: ${error.message}`, "error");
+        } else {
           showStatus("Successfully subscribed to push notifications!", "success");
         }
-      } catch (err) {
-        console.error('Push subscription error:', err);
-        showStatus(`Push subscription failed: ${err instanceof Error ? err.message : String(err)}`, "error");
       }
-    };
+    } catch (err) {
+      console.error('Push subscription error:', err);
+      setPushStatus('granted');
+      showStatus(`Subscription failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    }
+  }, [supabase, user, showStatus]);
 
-    if (supabase && !isLoading) subscribeToPush();
-  }, [supabase, user, isLoading]);
+  useEffect(() => {
+    // Check initial status
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setPushStatus('unsupported');
+    } else if (Notification.permission === 'granted') {
+      setPushStatus('granted');
+      // Try to get existing sub quietly
+      navigator.serviceWorker.ready.then(reg => reg.pushManager.getSubscription()).then(sub => {
+        if (sub) {
+          setPushSubscription(sub);
+          setPushStatus('subscribed');
+        }
+      });
+    } else if (Notification.permission === 'denied') {
+      setPushStatus('denied');
+    } else {
+      setPushStatus('loading'); // Default/Prompt state
+    }
+  }, []);
 
   function urlBase64ToUint8Array(base64String: string) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -744,6 +774,54 @@ const App: React.FC = () => {
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mt-0.5">{todayDisplay}</p>
                  </div>
               </div>
+
+              {/* Push Notification Settings - Crucial for iOS */}
+              <section className="bg-white border border-gray-100 rounded-[2.5rem] p-6 space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-amber-500" />
+                    <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest">Push Status</h2>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                    pushStatus === 'subscribed' ? 'bg-green-100 text-green-700' :
+                    pushStatus === 'denied' ? 'bg-red-100 text-red-700' :
+                    pushStatus === 'unsupported' ? 'bg-gray-100 text-gray-700' :
+                    'bg-amber-100 text-amber-700'
+                  }`}>
+                    {pushStatus}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    {pushStatus === 'subscribed' 
+                      ? "This device is registered and ready to receive notifications even when the app is closed."
+                      : pushStatus === 'denied'
+                      ? "Notifications are blocked. Please reset permissions in your browser/iOS settings to receive alerts."
+                      : pushStatus === 'unsupported'
+                      ? "Your browser doesn't support push notifications. On iPhone, make sure you've used 'Add to Home Screen'."
+                      : "To receive hydration reminders on this device, you need to enable push notifications."}
+                  </p>
+                  
+                  {pushStatus !== 'subscribed' && pushStatus !== 'unsupported' && (
+                    <button 
+                      onClick={subscribeToPush}
+                      disabled={pushStatus === 'loading'}
+                      className="w-full bg-green-600 text-white py-4 rounded-2xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {pushStatus === 'loading' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+                      Enable Notifications
+                    </button>
+                  )}
+
+                  {pushStatus === 'subscribed' && (
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-green-600 bg-green-50 p-3 rounded-xl border border-green-100">
+                      <ShieldCheck className="w-4 h-4" />
+                      Verified: Device ID stored in cloud
+                    </div>
+                  )}
+                </div>
+              </section>
 
               {/* Water Intake Station - High Visibility */}
               <section className="bg-blue-50/70 border border-blue-100 rounded-[2.5rem] p-6 space-y-5 shadow-sm">
