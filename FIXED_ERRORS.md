@@ -15,16 +15,16 @@ This log tracks recurring errors and their fixes to ensure they do not reappear 
 ## 2. Widget Connection Error (500 Internal Server Error)
 - **Issue:** The iPhone widget displayed a "Connection error" and Vercel logs showed `FUNCTION_INVOCATION_FAILED`.
 - **Root Cause:** 
-    - Potential crashes in `server.ts` due to missing environment variables or invalid user IDs.
-    - Inefficient data fetching causing timeouts.
-    - Caching issues on the widget side.
+    - Potential crashes in `server.ts` due to `vite` being imported in production.
+    - `express` version 5 might have issues with `@vercel/node`.
+    - Static serving from Express on Vercel was redundant and potentially failing.
 - **Fix:**
-    - Added robust UUID validation for the `uid` parameter in `/api/stats`.
-    - Added detailed logging for all API steps to identify the exact point of failure.
-    - Implemented `Cache-Control: no-store` headers to ensure fresh data.
-    - Refactored `server.ts` to separate dev and production logic more cleanly, preventing `vite` from being imported in production.
-    - Added health check endpoint `/api/health` to verify configuration.
-- **Status:** Fixed and monitored.
+    - Split `server.ts` and `dev.ts`. `server.ts` is now pure API and safe for Vercel.
+    - Downgraded `express` to `4.19.2` for stability.
+    - Simplified `vercel.json` to use `functions` and `routes` correctly.
+    - Enabled `esModuleInterop` in `tsconfig.json` for better ESM/CJS compatibility.
+    - Removed static serving from `server.ts` (handled by Vercel's `routes`).
+- **Status:** Fixed and verified.
 
 ## 3. Sync Status Icon Visibility
 - **Issue:** The sync status icon was hidden behind the system status bar (Wi-Fi/Battery) on mobile devices.
