@@ -51,24 +51,33 @@ app.get('/api/stats', async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Server: Supabase keys missing' });
   }
 
+  console.log(`[Stats API] Request from UID: ${req.query.uid || 'PUBLIC'}, Date: ${req.query.date || 'TODAY'}`);
+
   try {
-    const today = new Date().toISOString().split('T')[0];
     const userId = (req.query.uid as string) || PUBLIC_USER_ID;
+    const dateQuery = (req.query.date as string) || new Date().toISOString().split('T')[0];
 
     // Fetch all needed data in parallel
+    // We fetch data for the specific user OR data with no user_id (legacy)
     const [
       { data: waterData },
       { data: mealPlans },
       { data: recipes }
     ] = await Promise.all([
-      supabase.from('water_intake').select('*').eq('user_id', userId).eq('planned_date', today),
-      supabase.from('meal_plans').select('*').eq('user_id', userId).eq('planned_date', today),
+      supabase.from('water_intake')
+        .select('*')
+        .eq('planned_date', dateQuery)
+        .or(`user_id.eq.${userId},user_id.is.null`),
+      supabase.from('meal_plans')
+        .select('*')
+        .eq('planned_date', dateQuery)
+        .or(`user_id.eq.${userId},user_id.is.null`),
       supabase.from('recipes').select('*')
     ]);
 
     // Calculate totals
     const stats = {
-      date: today,
+      date: dateQuery,
       v: { water: 0, protein: 0, fiber: 0 },
       m: { water: 0, protein: 0, fiber: 0 }
     };
@@ -97,6 +106,9 @@ app.get('/api/stats', async (req: Request, res: Response) => {
       });
     });
 
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.json(stats);
   } catch (error: any) {
     console.error('Stats API Error:', error);
