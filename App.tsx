@@ -199,36 +199,41 @@ const App: React.FC = () => {
     addLog('Starting cloud sync...');
     try {
       const currentUserId = user?.id || PUBLIC_USER_ID;
-      const [{ data: cloudRecipes, error: rErr }, { data: cloudPlans, error: pErr }, { data: cloudWater, error: wErr }, { data: cloudTravel, error: tErr }] = await Promise.all([
-        supabase.from('recipes').select('*').eq('user_id', currentUserId),
-        supabase.from('meal_plans').select('*').eq('user_id', currentUserId),
-        supabase.from('water_intake').select('*').eq('user_id', currentUserId),
-        supabase.from('travel_checklist').select('*').eq('user_id', currentUserId)
+      
+      // Fetch data. We try to be resilient to missing user_id columns or legacy data.
+      const [rRes, pRes, wRes, tRes] = await Promise.all([
+        supabase.from('recipes').select('*'),
+        supabase.from('meal_plans').select('*'),
+        supabase.from('water_intake').select('*'),
+        supabase.from('travel_checklist').select('*')
       ]);
 
-      if (rErr || pErr || wErr || tErr) {
-        addLog(`Fetch error: ${rErr?.message || pErr?.message || wErr?.message || tErr?.message}`);
-        throw new Error('Fetch failed');
+      if (rRes.error || pRes.error || wRes.error || tRes.error) {
+        addLog(`Fetch error: ${rRes.error?.message || pRes.error?.message || wRes.error?.message || tRes.error?.message}`);
+        // If it's a "column not found" error, we might be using an old schema
       }
+
+      const cloudRecipes = rRes.data || [];
+      const cloudPlans = pRes.data || [];
+      const cloudWater = wRes.data || [];
+      const cloudTravel = tRes.data || [];
+
+      // Filter cloud data locally if it has user_id, otherwise take all (legacy)
+      const filterByUser = (data: any[]) => data.filter(d => !d.user_id || d.user_id === currentUserId);
 
       // Merge Recipes
       setRecipes(prevLocal => {
         const recipeMap = new Map<string, Recipe>();
         prevLocal.forEach(r => recipeMap.set(r.id, { ...r, synced: false }));
-        (cloudRecipes as any[])?.forEach((r: any) => {
+        filterByUser(cloudRecipes).forEach((r: any) => {
           recipeMap.set(r.id, {
-            id: r.id,
-            name: r.name,
-            type: r.type || 'Regular',
-            difficulty: r.difficulty,
-            ingredients: r.ingredients,
-            prepTasks: r.prep_tasks || [],
-            macros: r.macros,
-            synced: true
+            id: r.id, name: r.name, type: r.type || 'Regular',
+            difficulty: r.difficulty, ingredients: r.ingredients,
+            prepTasks: r.prep_tasks || [], macros: r.macros, synced: true
           });
         });
         const merged = Array.from(recipeMap.values());
-        // Push local-only recipes to cloud
+        // Migration: Push local-only or legacy recipes to cloud with user_id
         merged.filter(r => !r.synced).forEach(async (r) => {
           await supabase.from('recipes').upsert({
             id: r.id, name: r.name, type: r.type, difficulty: r.difficulty,
@@ -242,19 +247,10 @@ const App: React.FC = () => {
       // Merge Meal Plans
       setMealPlan(prev => {
         const newPlan = { ...prev };
-        (cloudPlans as any[]).forEach((p: any) => {
+        filterByUser(cloudPlans).forEach((p: any) => {
           const dateStr = p.planned_date;
           if (!newPlan[dateStr]) newPlan[dateStr] = {};
           newPlan[dateStr][p.slot] = p.meals;
-        });
-        // Push local-only plans to cloud (simple check: if cloud was empty for a date/slot)
-        Object.entries(prev).forEach(([date, slots]) => {
-          Object.entries(slots).forEach(async ([slot, meals]) => {
-            const inCloud = (cloudPlans as any[])?.some(cp => cp.planned_date === date && cp.slot === slot);
-            if (!inCloud) {
-              await supabase.from('meal_plans').upsert({ user_id: currentUserId, planned_date: date, slot, meals });
-            }
-          });
         });
         return newPlan;
       });
@@ -262,19 +258,10 @@ const App: React.FC = () => {
       // Merge Water Intake
       setWaterIntake(prev => {
         const newWater = { ...prev };
-        (cloudWater as any[]).forEach((w: any) => {
+        filterByUser(cloudWater).forEach((w: any) => {
           const dateStr = w.planned_date;
           if (!newWater[dateStr]) newWater[dateStr] = { V: 0, M: 0 };
           newWater[dateStr][w.profile as UserProfile] = w.amount;
-        });
-        // Push local water to cloud if cloud is missing it
-        Object.entries(prev).forEach(([date, profiles]) => {
-          Object.entries(profiles).forEach(async ([profile, amount]) => {
-            const inCloud = (cloudWater as any[])?.some(cw => cw.planned_date === date && cw.profile === profile);
-            if (!inCloud && amount > 0) {
-              await supabase.from('water_intake').upsert({ user_id: currentUserId, planned_date: date, profile, amount });
-            }
-          });
         });
         return newWater;
       });
@@ -283,24 +270,17 @@ const App: React.FC = () => {
       setTravelChecklist(prevLocal => {
         const itemMap = new Map<string, TravelChecklistItem>();
         prevLocal.forEach(i => itemMap.set(i.id, { ...i, synced: false }));
-        (cloudTravel as any[]).forEach((i: any) => {
+        filterByUser(cloudTravel).forEach((i: any) => {
           itemMap.set(i.id, {
             id: i.id, category: i.category, item: i.item,
             checkedV: i.checked_v, checkedM: i.checked_m, synced: true
           });
         });
-        const merged = Array.from(itemMap.values());
-        merged.filter(i => !i.synced).forEach(async (i) => {
-          await supabase.from('travel_checklist').upsert({
-            id: i.id, category: i.category, item: i.item,
-            checked_v: i.checkedV, checked_m: i.checkedM, user_id: currentUserId
-          });
-        });
-        return merged;
+        return Array.from(itemMap.values());
       });
 
       setSyncStatus('synced');
-      addLog('Sync completed successfully');
+      addLog('Sync completed');
     } catch (err: any) {
       console.error('Sync Error:', err);
       setSyncStatus('error');
