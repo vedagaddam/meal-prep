@@ -89,8 +89,60 @@ const App: React.FC = () => {
   
   const [sbConfig, setSbConfig] = useState<{ url: string; key: string } | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'info' | 'error' | 'success' } | null>(null);
+
+  const showStatus = useCallback((text: string, type: 'info' | 'error' | 'success' = 'info') => {
+    setStatusMessage({ text, type });
+    setTimeout(() => setStatusMessage(null), 5000);
+  }, []);
 
   const scrollContainerRef = useRef<HTMLElement>(null);
+
+  // Global error handlers
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      showStatus(`Error: ${event.message}`, "error");
+    };
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason instanceof Error ? event.reason.message : String(event.reason);
+      showStatus(`Promise Error: ${reason}`, "error");
+    };
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleRejection);
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
+  }, [showStatus]);
+
+  // Online/Offline status
+  useEffect(() => {
+    const handleOnline = () => showStatus("Back online!", "success");
+    const handleOffline = () => showStatus("You are offline. Syncing disabled.", "error");
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    if (!navigator.onLine) handleOffline();
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [showStatus]);
+
+  // Service Worker Check
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (!reg) {
+          console.warn('No service worker registration found');
+          // Don't show status immediately, maybe it's still registering
+        }
+      });
+    } else {
+      showStatus("Service Workers not supported. PWA features disabled.", "error");
+    }
+  }, [showStatus]);
 
   const supabase = useMemo(() => {
     if (!sbConfig?.url || !sbConfig?.key) return null;
@@ -392,22 +444,42 @@ const App: React.FC = () => {
 
   // Notification Logic
   const sendNotification = useCallback(async (title: string, body: string, broadcast = true) => {
+    console.log('sendNotification called:', { title, body, broadcast });
+    
     // 1. Local Notification (if app is open)
-    if ("Notification" in window && Notification.permission === "granted") {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then(registration => {
-          registration.showNotification(title, {
-            body,
-            icon: '/favicon.ico',
-            badge: '/favicon.ico',
-            vibrate: [200, 100, 200]
-          } as any);
-        });
+    if ("Notification" in window) {
+      if (Notification.permission === "default") {
+        try {
+          await Notification.requestPermission();
+        } catch (e) {
+          showStatus("Failed to request notification permission", "error");
+        }
       }
+      
+      if (Notification.permission === "granted") {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then(registration => {
+            registration.showNotification(title, {
+              body,
+              icon: '/favicon.ico',
+              badge: '/favicon.ico',
+              vibrate: [200, 100, 200]
+            } as any);
+          });
+        } else {
+          new Notification(title, { body, icon: '/favicon.ico' });
+        }
+      } else {
+        console.warn('Notification permission not granted:', Notification.permission);
+        showStatus(`Notification permission: ${Notification.permission}. Please enable in browser settings.`, "info");
+      }
+    } else {
+      showStatus("Notifications not supported in this browser", "error");
     }
 
     // 2. Broadcast to other devices (via Realtime if app is open)
     if (broadcast && notificationChannelRef.current) {
+      console.log('Broadcasting notification via Realtime');
       notificationChannelRef.current.send({
         type: 'broadcast',
         event: 'reminder',
@@ -418,33 +490,70 @@ const App: React.FC = () => {
     // 3. Web Push (via Backend if app is CLOSED)
     if (broadcast && supabase) {
       try {
-        const { data: subs } = await supabase.from('push_subscriptions').select('subscription');
-        if (subs) {
+        console.log('Fetching push subscriptions from Supabase');
+        const { data: subs, error } = await supabase.from('push_subscriptions').select('subscription');
+        if (error) throw error;
+        
+        if (subs && subs.length > 0) {
+          console.log(`Sending push notifications to ${subs.length} subscriptions`);
+          showStatus(`Sending push to ${subs.length} devices...`, "info");
+          
+          let successCount = 0;
           await Promise.all(subs.map(async (s: any) => {
-            // Don't send push to ourselves if we're active (optional, but safer to just send to all)
-            await fetch('/api/push/send', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                subscription: s.subscription,
-                title,
-                body
-              })
-            });
+            try {
+              const response = await fetch('/api/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  subscription: s.subscription,
+                  title,
+                  body
+                })
+              });
+              if (response.ok) {
+                successCount++;
+              } else {
+                const errData = await response.json();
+                console.error('Push send failed for a subscription:', errData);
+              }
+            } catch (fetchErr) {
+              console.error('Fetch error for push send:', fetchErr);
+            }
           }));
+          
+          if (successCount > 0) {
+            showStatus(`Successfully sent push to ${successCount} devices`, "success");
+          } else {
+            showStatus("Failed to send push notifications to any devices", "error");
+          }
+        } else {
+          console.log('No push subscriptions found in Supabase');
+          showStatus("No other devices subscribed for push notifications", "info");
         }
       } catch (err) {
         console.error('Push error:', err);
+        showStatus(`Push error: ${err instanceof Error ? err.message : String(err)}`, "error");
       }
     }
-  }, [supabase]);
+  }, [supabase, showStatus]);
 
   // Push Subscription Setup
   useEffect(() => {
     const subscribeToPush = async () => {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.log('Push notifications not supported in this browser');
+        return;
+      }
 
       try {
+        // Request permission explicitly
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          console.warn('Notification permission denied');
+          showStatus("Notification permission denied. Push notifications disabled.", "info");
+          return;
+        }
+
         const registration = await navigator.serviceWorker.ready;
         const existingSub = await registration.pushManager.getSubscription();
         
@@ -456,6 +565,7 @@ const App: React.FC = () => {
         const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
         if (!vapidPublicKey) {
           console.warn('VITE_VAPID_PUBLIC_KEY is missing. Push subscription will fail.');
+          showStatus("VAPID Public Key missing. Cannot subscribe to push.", "error");
           return;
         }
         const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
@@ -468,13 +578,17 @@ const App: React.FC = () => {
         setPushSubscription(newSub);
         
         if (supabase) {
-          await supabase.from('push_subscriptions').upsert({
+          const { error } = await supabase.from('push_subscriptions').upsert({
             user_id: user?.id || PUBLIC_USER_ID,
             subscription: newSub
           }, { onConflict: 'user_id,subscription' });
+          
+          if (error) throw error;
+          showStatus("Successfully subscribed to push notifications!", "success");
         }
       } catch (err) {
         console.error('Push subscription error:', err);
+        showStatus(`Push subscription failed: ${err instanceof Error ? err.message : String(err)}`, "error");
       }
     };
 
@@ -640,7 +754,10 @@ const App: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     <button 
-                      onClick={() => sendNotification("Hydration Check", "Time to drink some water!")}
+                      onClick={() => {
+                        console.log('Bell button clicked');
+                        sendNotification("Hydration Check", "Time to drink some water!");
+                      }}
                       className="w-8 h-8 bg-white border border-blue-100 rounded-xl flex items-center justify-center text-blue-500 shadow-sm active:scale-95 transition-all"
                       title="Send Reminder"
                     >
@@ -691,6 +808,21 @@ const App: React.FC = () => {
 
       <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
       {isFormOpen && <RecipeForm onClose={() => setIsFormOpen(false)} onSave={handleSaveRecipe} initialData={editingRecipe} />}
+
+      {/* Status Message / Toast */}
+      {statusMessage && (
+        <div className={`fixed bottom-24 left-4 right-4 p-4 rounded-2xl shadow-2xl z-50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 ${
+          statusMessage.type === 'error' ? 'bg-rose-600 text-white' : 
+          statusMessage.type === 'success' ? 'bg-emerald-600 text-white' : 
+          'bg-blue-600 text-white'
+        }`}>
+          {statusMessage.type === 'error' ? <AlertTriangle className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
+          <p className="text-xs font-bold tracking-tight">{statusMessage.text}</p>
+          <button onClick={() => setStatusMessage(null)} className="ml-auto p-1 hover:bg-white/20 rounded-lg transition-colors">
+            <Plus className="w-4 h-4 rotate-45" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
