@@ -19,12 +19,12 @@ This log tracks recurring errors and their fixes to ensure they do not reappear 
     - `express` version 5 might have issues with `@vercel/node`.
     - Static serving from Express on Vercel was redundant and potentially failing.
 - **Fix:**
-    - Split `server.ts` and `dev.ts`. `server.ts` is now pure API and safe for Vercel.
+    - Moved API logic to `api/index.ts` (Vercel-native directory structure).
+    - Split `api/index.ts` and `dev.ts`. `api/index.ts` is now pure API and safe for Vercel.
     - Downgraded `express` to `4.19.2` for stability.
-    - Fixed `vercel.json` runtime to `nodejs20.x` (was incorrectly using `@vercel/node` builder as a runtime).
-    - Simplified `vercel.json` to use `functions` and `routes` correctly.
+    - Simplified `vercel.json` by removing the `functions` block and using standard `routes`.
+    - Added `engines` to `package.json` to explicitly set Node.js 20.
     - Enabled `esModuleInterop` in `tsconfig.json` for better ESM/CJS compatibility.
-    - Removed static serving from `server.ts` (handled by Vercel's `routes`).
 - **Status:** Fixed and verified.
 
 ## 3. Sync Status Icon Visibility
