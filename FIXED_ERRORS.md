@@ -21,6 +21,7 @@ This log tracks recurring errors and their fixes to ensure they do not reappear 
 - **Fix:**
     - Split `server.ts` and `dev.ts`. `server.ts` is now pure API and safe for Vercel.
     - Downgraded `express` to `4.19.2` for stability.
+    - Fixed `vercel.json` runtime to `nodejs20.x` (was incorrectly using `@vercel/node` builder as a runtime).
     - Simplified `vercel.json` to use `functions` and `routes` correctly.
     - Enabled `esModuleInterop` in `tsconfig.json` for better ESM/CJS compatibility.
     - Removed static serving from `server.ts` (handled by Vercel's `routes`).
