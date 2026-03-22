@@ -495,12 +495,19 @@ const App: React.FC = () => {
         const { data: subs, error } = await supabase.from('push_subscriptions').select('subscription');
         if (error) throw error;
         
-        if (subs && subs.length > 0) {
-          console.log(`Sending push notifications to ${subs.length} subscriptions`);
-          showStatus(`Sending push to ${subs.length} devices...`, "info");
+        // Filter out current subscription to avoid sending to self
+        const otherSubs = subs?.filter(s => {
+          const subStr = JSON.stringify(s.subscription);
+          const currentSubStr = pushSubscription ? JSON.stringify(pushSubscription) : null;
+          return subStr !== currentSubStr;
+        }) || [];
+
+        if (otherSubs.length > 0) {
+          console.log(`Sending push notifications to ${otherSubs.length} other subscriptions`);
+          showStatus(`Sending push to ${otherSubs.length} devices...`, "info");
           
           let successCount = 0;
-          await Promise.all(subs.map(async (s: any) => {
+          await Promise.all(otherSubs.map(async (s: any) => {
             try {
               const response = await fetch('/api/push/send', {
                 method: 'POST',
@@ -528,15 +535,15 @@ const App: React.FC = () => {
             showStatus("Failed to send push notifications to any devices", "error");
           }
         } else {
-          console.log('No push subscriptions found in Supabase');
-          showStatus("No other devices subscribed for push notifications", "info");
+          console.log('No other push subscriptions found in Supabase');
+          showStatus("No other devices are currently subscribed.", "info");
         }
       } catch (err) {
         console.error('Push error:', err);
         showStatus(`Push error: ${err instanceof Error ? err.message : String(err)}`, "error");
       }
     }
-  }, [supabase, showStatus]);
+  }, [supabase, showStatus, pushSubscription]);
 
   // Push Subscription Setup
   const subscribeToPush = useCallback(async () => {
@@ -611,11 +618,21 @@ const App: React.FC = () => {
       setPushStatus('unsupported');
     } else if (Notification.permission === 'granted') {
       setPushStatus('granted');
-      // Try to get existing sub quietly
+      // Try to get existing sub quietly or re-subscribe if needed
       navigator.serviceWorker.ready.then(reg => reg.pushManager.getSubscription()).then(sub => {
         if (sub) {
           setPushSubscription(sub);
           setPushStatus('subscribed');
+          // Ensure it's in Supabase
+          if (supabase && !isLoading) {
+            supabase.from('push_subscriptions').upsert({
+              user_id: user?.id || PUBLIC_USER_ID,
+              subscription: JSON.parse(JSON.stringify(sub))
+            }, { onConflict: 'user_id,subscription' });
+          }
+        } else if (supabase && !isLoading) {
+          // Permission is granted but no subscription exists, try to create it
+          subscribeToPush();
         }
       });
     } else if (Notification.permission === 'denied') {
@@ -623,7 +640,7 @@ const App: React.FC = () => {
     } else {
       setPushStatus('loading'); // Default/Prompt state
     }
-  }, []);
+  }, [supabase, user, isLoading, subscribeToPush]);
 
   function urlBase64ToUint8Array(base64String: string) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
