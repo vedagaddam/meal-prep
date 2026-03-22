@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import webpush from 'web-push';
@@ -12,20 +12,24 @@ const app = express();
 const PORT = 3000;
 
 // VAPID keys should be in environment variables
-const VAPID_PUBLIC_KEY = process.env.VITE_VAPID_PUBLIC_KEY || 'BHxQBYCzfC83A_xFfFdpXMNMsbxmA1hwJWe00MC6m8Z8k-MQfqWvCqt4khMoUsqmz-CT3Ia2_MY7bjT7IwouJs8';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'YP0Qod0ld7Mbxueyuacp255l2sG2SIXoCQW3xhDnoDg';
+const VAPID_PUBLIC_KEY = process.env.VITE_VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 
-webpush.setVapidDetails(
-  'mailto:gaddamveda@gmail.com',
-  VAPID_PUBLIC_KEY,
-  VAPID_PRIVATE_KEY
-);
+if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+  console.warn('VAPID keys are missing from environment variables. Push notifications will not work.');
+} else {
+  webpush.setVapidDetails(
+    'mailto:gaddamveda@gmail.com',
+    VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY
+  );
+}
 
 app.use(cors());
 app.use(bodyParser.json());
 
 // API routes
-app.post('/api/push/send', async (req, res) => {
+app.post('/api/push/send', async (req: Request, res: Response) => {
   const { subscription, title, body } = req.body;
   
   if (!subscription) {
@@ -53,7 +57,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*', (req: Request, res: Response) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

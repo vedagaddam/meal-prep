@@ -401,7 +401,7 @@ const App: React.FC = () => {
             icon: '/favicon.ico',
             badge: '/favicon.ico',
             vibrate: [200, 100, 200]
-          });
+          } as any);
         });
       }
     }
@@ -453,7 +453,11 @@ const App: React.FC = () => {
           return;
         }
 
-        const vapidPublicKey = 'BHxQBYCzfC83A_xFfFdpXMNMsbxmA1hwJWe00MC6m8Z8k-MQfqWvCqt4khMoUsqmz-CT3Ia2_MY7bjT7IwouJs8';
+        const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+        if (!vapidPublicKey) {
+          console.warn('VITE_VAPID_PUBLIC_KEY is missing. Push subscription will fail.');
+          return;
+        }
         const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
 
         const newSub = await registration.pushManager.subscribe({
