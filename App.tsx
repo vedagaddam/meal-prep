@@ -188,85 +188,125 @@ const App: React.FC = () => {
     return { V: v, M: m };
   }, [mealPlan, recipes, todayKey]);
 
+  const [syncLog, setSyncLog] = useState<string[]>([]);
+  const addLog = useCallback((msg: string) => {
+    setSyncLog(prev => [new Date().toLocaleTimeString() + ': ' + msg, ...prev].slice(0, 10));
+  }, []);
+
   const fetchAndMergeCloudData = useCallback(async () => {
     if (!supabase || isLoading) return;
     setSyncStatus('syncing');
+    addLog('Starting cloud sync...');
     try {
       const currentUserId = user?.id || PUBLIC_USER_ID;
-      const [{ data: cloudRecipes }, { data: cloudPlans }, { data: cloudWater }, { data: cloudTravel }] = await Promise.all([
+      const [{ data: cloudRecipes, error: rErr }, { data: cloudPlans, error: pErr }, { data: cloudWater, error: wErr }, { data: cloudTravel, error: tErr }] = await Promise.all([
         supabase.from('recipes').select('*').eq('user_id', currentUserId),
         supabase.from('meal_plans').select('*').eq('user_id', currentUserId),
         supabase.from('water_intake').select('*').eq('user_id', currentUserId),
         supabase.from('travel_checklist').select('*').eq('user_id', currentUserId)
       ]);
 
-      if (cloudRecipes) {
-        setRecipes(prevLocal => {
-          const recipeMap = new Map<string, Recipe>();
-          prevLocal.forEach(r => recipeMap.set(r.id, { ...r, synced: false }));
-          (cloudRecipes as any[])?.forEach((r: any) => {
-            recipeMap.set(r.id, {
-              id: r.id,
-              name: r.name,
-              type: r.type || 'Regular',
-              difficulty: r.difficulty,
-              ingredients: r.ingredients,
-              prepTasks: r.prep_tasks || [],
-              macros: r.macros,
-              synced: true
-            });
-          });
-          return Array.from(recipeMap.values());
-        });
+      if (rErr || pErr || wErr || tErr) {
+        addLog(`Fetch error: ${rErr?.message || pErr?.message || wErr?.message || tErr?.message}`);
+        throw new Error('Fetch failed');
       }
 
-      if (cloudPlans) {
-        setMealPlan(prev => {
-          const newPlan = { ...prev };
-          (cloudPlans as any[]).forEach((p: any) => {
-            const dateStr = p.planned_date;
-            if (!newPlan[dateStr]) newPlan[dateStr] = {};
-            newPlan[dateStr][p.slot] = p.meals;
+      // Merge Recipes
+      setRecipes(prevLocal => {
+        const recipeMap = new Map<string, Recipe>();
+        prevLocal.forEach(r => recipeMap.set(r.id, { ...r, synced: false }));
+        (cloudRecipes as any[])?.forEach((r: any) => {
+          recipeMap.set(r.id, {
+            id: r.id,
+            name: r.name,
+            type: r.type || 'Regular',
+            difficulty: r.difficulty,
+            ingredients: r.ingredients,
+            prepTasks: r.prep_tasks || [],
+            macros: r.macros,
+            synced: true
           });
-          return newPlan;
         });
-      }
+        const merged = Array.from(recipeMap.values());
+        // Push local-only recipes to cloud
+        merged.filter(r => !r.synced).forEach(async (r) => {
+          await supabase.from('recipes').upsert({
+            id: r.id, name: r.name, type: r.type, difficulty: r.difficulty,
+            ingredients: r.ingredients, prep_tasks: r.prepTasks, macros: r.macros,
+            user_id: currentUserId
+          });
+        });
+        return merged;
+      });
 
-      if (cloudWater) {
-        setWaterIntake(prev => {
-          const newWater = { ...prev };
-          (cloudWater as any[]).forEach((w: any) => {
-            const dateStr = w.planned_date;
-            if (!newWater[dateStr]) newWater[dateStr] = { V: 0, M: 0 };
-            newWater[dateStr][w.profile as UserProfile] = w.amount;
-          });
-          return newWater;
+      // Merge Meal Plans
+      setMealPlan(prev => {
+        const newPlan = { ...prev };
+        (cloudPlans as any[]).forEach((p: any) => {
+          const dateStr = p.planned_date;
+          if (!newPlan[dateStr]) newPlan[dateStr] = {};
+          newPlan[dateStr][p.slot] = p.meals;
         });
-      }
+        // Push local-only plans to cloud (simple check: if cloud was empty for a date/slot)
+        Object.entries(prev).forEach(([date, slots]) => {
+          Object.entries(slots).forEach(async ([slot, meals]) => {
+            const inCloud = (cloudPlans as any[])?.some(cp => cp.planned_date === date && cp.slot === slot);
+            if (!inCloud) {
+              await supabase.from('meal_plans').upsert({ user_id: currentUserId, planned_date: date, slot, meals });
+            }
+          });
+        });
+        return newPlan;
+      });
 
-      if (cloudTravel) {
-        setTravelChecklist(prevLocal => {
-          const itemMap = new Map<string, TravelChecklistItem>();
-          prevLocal.forEach(i => itemMap.set(i.id, { ...i, synced: false }));
-          (cloudTravel as any[]).forEach((i: any) => {
-            itemMap.set(i.id, {
-              id: i.id,
-              category: i.category,
-              item: i.item,
-              checkedV: i.checked_v,
-              checkedM: i.checked_m,
-              synced: true
-            });
-          });
-          return Array.from(itemMap.values());
+      // Merge Water Intake
+      setWaterIntake(prev => {
+        const newWater = { ...prev };
+        (cloudWater as any[]).forEach((w: any) => {
+          const dateStr = w.planned_date;
+          if (!newWater[dateStr]) newWater[dateStr] = { V: 0, M: 0 };
+          newWater[dateStr][w.profile as UserProfile] = w.amount;
         });
-      }
+        // Push local water to cloud if cloud is missing it
+        Object.entries(prev).forEach(([date, profiles]) => {
+          Object.entries(profiles).forEach(async ([profile, amount]) => {
+            const inCloud = (cloudWater as any[])?.some(cw => cw.planned_date === date && cw.profile === profile);
+            if (!inCloud && amount > 0) {
+              await supabase.from('water_intake').upsert({ user_id: currentUserId, planned_date: date, profile, amount });
+            }
+          });
+        });
+        return newWater;
+      });
+
+      // Merge Travel Checklist
+      setTravelChecklist(prevLocal => {
+        const itemMap = new Map<string, TravelChecklistItem>();
+        prevLocal.forEach(i => itemMap.set(i.id, { ...i, synced: false }));
+        (cloudTravel as any[]).forEach((i: any) => {
+          itemMap.set(i.id, {
+            id: i.id, category: i.category, item: i.item,
+            checkedV: i.checked_v, checkedM: i.checked_m, synced: true
+          });
+        });
+        const merged = Array.from(itemMap.values());
+        merged.filter(i => !i.synced).forEach(async (i) => {
+          await supabase.from('travel_checklist').upsert({
+            id: i.id, category: i.category, item: i.item,
+            checked_v: i.checkedV, checked_m: i.checkedM, user_id: currentUserId
+          });
+        });
+        return merged;
+      });
+
       setSyncStatus('synced');
-    } catch (err) {
+      addLog('Sync completed successfully');
+    } catch (err: any) {
       console.error('Sync Error:', err);
       setSyncStatus('error');
+      addLog(`Sync failed: ${err.message}`);
     }
-  }, [supabase, isLoading, user]);
+  }, [supabase, isLoading, user, addLog]);
 
   const handleUpdateWater = async (date: string, profile: UserProfile, delta: number) => {
     let newAmount = 0;
@@ -274,19 +314,28 @@ const App: React.FC = () => {
     setWaterIntake(prev => {
       const dayWater = prev[date] || { V: 0, M: 0 };
       newAmount = Math.max(0, dayWater[profile] + delta);
-      return { ...prev, [date]: { ...dayWater, [profile]: newAmount } };
+      const updated = { ...prev, [date]: { ...dayWater, [profile]: newAmount } };
+      saveDataLocal('water_intake', updated); // Immediate local save
+      return updated;
     });
 
     if (supabase) {
       try {
-        await supabase.from('water_intake').upsert({
+        const { error } = await supabase.from('water_intake').upsert({
           user_id: user?.id || PUBLIC_USER_ID,
           planned_date: date,
           profile,
           amount: newAmount
         }, { onConflict: 'user_id,planned_date,profile' });
-        setSyncStatus('synced');
-      } catch (err) {
+        
+        if (error) {
+          addLog(`Water sync error: ${error.message}`);
+          setSyncStatus('error');
+        } else {
+          setSyncStatus('synced');
+        }
+      } catch (err: any) {
+        addLog(`Water sync exception: ${err.message}`);
         setSyncStatus('error');
       }
     }
@@ -573,6 +622,23 @@ const App: React.FC = () => {
           <p className="text-xs font-bold tracking-tight">{statusMessage.text}</p>
           <button onClick={() => setStatusMessage(null)} className="ml-auto p-1 hover:bg-white/20 rounded-lg transition-colors">
             <Plus className="w-4 h-4 rotate-45" />
+          </button>
+        </div>
+      )}
+
+      {/* Sync Log Overlay (Debug) */}
+      {syncStatus === 'error' && syncLog.length > 0 && (
+        <div className="fixed top-20 left-4 right-4 bg-black/90 text-white p-4 rounded-2xl z-[70] text-[10px] font-mono space-y-1 overflow-hidden">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-rose-400 font-bold uppercase">Sync Log</span>
+            <button onClick={() => setSyncLog([])} className="text-white/40">Clear</button>
+          </div>
+          {syncLog.map((log, i) => <div key={i} className="opacity-80">{log}</div>)}
+          <button 
+            onClick={() => fetchAndMergeCloudData()} 
+            className="w-full mt-2 py-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
+          >
+            Retry Sync
           </button>
         </div>
       )}
