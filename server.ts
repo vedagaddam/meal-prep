@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
 import path from 'path';
 import bodyParser from 'body-parser';
 import cors from 'cors';
@@ -24,25 +24,28 @@ const getSupabase = () => {
 };
 
 // API routes
-app.get('/api/health', (req: Request, res: Response) => {
+app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok',
     supabaseConfigured: !!(process.env.VITE_SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY)),
     widgetKeyConfigured: !!process.env.WIDGET_SECRET_KEY,
-    env: process.env.NODE_ENV
+    env: process.env.NODE_ENV,
+    isVercel: !!process.env.VERCEL
   });
 });
 
 // Secure Stats API for Widget
-app.get('/api/stats', async (req: Request, res: Response) => {
+app.get('/api/stats', async (req, res) => {
   const widgetKey = req.query.key || req.headers['x-widget-key'];
   const secretKey = process.env.WIDGET_SECRET_KEY;
 
   if (!secretKey) {
+    console.error('[Stats API] CRITICAL: WIDGET_SECRET_KEY is not set in environment variables.');
     return res.status(500).json({ error: 'Server: WIDGET_SECRET_KEY missing' });
   }
 
   if (widgetKey !== secretKey) {
+    console.warn(`[Stats API] Unauthorized access attempt. Key provided: ${widgetKey ? 'YES' : 'NO'}`);
     return res.status(401).json({ error: 'Unauthorized: Key mismatch' });
   }
 
@@ -54,16 +57,15 @@ app.get('/api/stats', async (req: Request, res: Response) => {
   console.log(`[Stats API] Request from UID: ${req.query.uid || 'PUBLIC'}, Date: ${req.query.date || 'TODAY'}`);
 
   try {
-    const userId = (req.query.uid as string) || PUBLIC_USER_ID;
+    const rawUid = req.query.uid as string;
+    // Simple UUID validation to prevent Supabase errors on invalid strings
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const userId = (rawUid && uuidRegex.test(rawUid)) ? rawUid : PUBLIC_USER_ID;
+    
     const dateQuery = (req.query.date as string) || new Date().toISOString().split('T')[0];
 
     // Fetch all needed data in parallel
-    // We fetch data for the specific user OR data with no user_id (legacy)
-    const [
-      { data: waterData },
-      { data: mealPlans },
-      { data: recipes }
-    ] = await Promise.all([
+    const [waterRes, mealRes, recipeRes] = await Promise.all([
       supabase.from('water_intake')
         .select('*')
         .eq('planned_date', dateQuery)
@@ -74,6 +76,14 @@ app.get('/api/stats', async (req: Request, res: Response) => {
         .or(`user_id.eq.${userId},user_id.is.null`),
       supabase.from('recipes').select('*')
     ]);
+
+    if (waterRes.error) console.error('[Stats API] Water Error:', waterRes.error);
+    if (mealRes.error) console.error('[Stats API] Meal Error:', mealRes.error);
+    if (recipeRes.error) console.error('[Stats API] Recipe Error:', recipeRes.error);
+
+    const waterData = waterRes.data || [];
+    const mealPlans = mealRes.data || [];
+    const recipes = recipeRes.data || [];
 
     // Calculate totals
     const stats = {
@@ -117,29 +127,36 @@ app.get('/api/stats', async (req: Request, res: Response) => {
 });
 
 // Static serving for Production (Vercel)
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
   const distPath = path.join(process.cwd(), 'dist');
   app.use(express.static(distPath));
-  app.get('*', (req: Request, res: Response) => {
+  // Note: Vercel usually handles the fallback to index.html via vercel.json routes,
+  // but keeping this for local production testing or other environments.
+  app.get('*', (req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }
 
-async function startDevServer() {
-  if (process.env.NODE_ENV !== 'production') {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-    
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`Dev Server running on http://localhost:${PORT}`);
-    });
-  }
+// Only start the server if we're not running as a serverless function on Vercel
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  const startDevServer = async () => {
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+      
+      app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Dev Server running on http://localhost:${PORT}`);
+      });
+    } catch (e) {
+      console.error('Failed to start dev server:', e);
+      app.listen(PORT, '0.0.0.0');
+    }
+  };
+  startDevServer();
 }
-
-startDevServer();
 
 export default app;
